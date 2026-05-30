@@ -8,6 +8,7 @@ run for the same date returns the existing batch unchanged.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from ..config import Config
@@ -76,14 +77,20 @@ def _fetch_retrieval(cfg: Config, search: SearchProvider | None, store: Store,
     return collected[:8]
 
 
-def _generate_one(llm: LLMProvider, prompt: str, temperature: float) -> dict:
-    """Generate + tolerant-parse one idea, with a single repair retry."""
+def _generate_one(llm: LLMProvider, prompt: str, temperature: float,
+                  *, max_repairs: int = 2) -> dict:
+    """Generate + tolerant-parse one idea, with up to `max_repairs` repair retries.
+
+    Flash-tier models occasionally emit prose instead of JSON; each repair re-asks
+    for JSON only. Raises IdeaParseError if still unrecoverable after the retries.
+    """
     text = llm.generate(prompt, temperature=temperature, json_schema=IDEA_JSON_SCHEMA)
-    try:
-        return parse_idea(text)
-    except IdeaParseError:
-        repaired = llm.generate(_REPAIR_INSTRUCTION + text, temperature=0.0)
-        return parse_idea(repaired)  # let it raise if still unrecoverable
+    for _ in range(max_repairs):
+        try:
+            return parse_idea(text)
+        except IdeaParseError:
+            text = llm.generate(_REPAIR_INSTRUCTION + text, temperature=0.0)
+    return parse_idea(text)  # final attempt; raises IdeaParseError if still unrecoverable
 
 
 def _apply_self_ranks(llm: LLMProvider, cfg: Config, ideas: list[Idea],
@@ -145,7 +152,7 @@ def run_batch(
 
     slots = SLOTS[: cfg.generation.n_slots]
     ideas: list[Idea] = []
-    for idx, slot in enumerate(slots, start=1):
+    for slot in slots:
         genes = sample_genes(genes_pool) if slot == "random" else None
         context = {
             "skill": skill_text,
@@ -156,13 +163,20 @@ def run_batch(
         prompt = build_generation_prompt(
             slot, context, prompts_dir, cfg.generation.output_language, genes
         )
-        parsed = _generate_one(llm, prompt, slot_temperature(cfg.generation.temperature, slot))
+        try:
+            parsed = _generate_one(llm, prompt, slot_temperature(cfg.generation.temperature, slot))
+        except IdeaParseError:
+            # Resilience (DESIGN.md philosophy): a single slot that won't yield JSON
+            # must not sink the whole morning. Skip it and keep what parsed.
+            print(f"[warning] slot '{slot}' returned no valid JSON after retries; skipping it.",
+                  file=sys.stderr)
+            continue
         ideas.append(
             Idea(
                 idea_id=new_id(),
                 batch_id=batch_id,
                 slot=slot,
-                idx=idx,
+                idx=len(ideas) + 1,
                 title=parsed["title"],
                 mechanism=parsed["mechanism"],
                 why_now=parsed["why_now"],
@@ -173,6 +187,12 @@ def run_batch(
                 random_genes=json.dumps(genes, ensure_ascii=False) if genes else "",
                 created_at=now_iso(),
             )
+        )
+
+    if not ideas:
+        raise RuntimeError(
+            "all slots failed to produce valid JSON after retries; "
+            "check the model/provider settings."
         )
 
     _apply_self_ranks(llm, cfg, ideas, prompts_dir)

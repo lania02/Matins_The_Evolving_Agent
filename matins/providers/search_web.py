@@ -12,6 +12,7 @@ can be slotted in here behind the same `search(query, *, k=5)` signature.
 from __future__ import annotations
 
 import re
+import time
 import xml.etree.ElementTree as ET
 from html import unescape
 from html.parser import HTMLParser
@@ -48,21 +49,35 @@ class ArxivSearchProvider:
     """Search arXiv via its public Atom API."""
 
     def search(self, query: str, *, k: int = 5) -> list[dict]:
+        # AND the terms (all:t1 AND all:t2 ...) so every keyword must appear.
+        # arXiv treats a bare space-separated all: query as OR, which lets a paper
+        # matching just one generic word (e.g. "spectral") dominate; ANDing instead
+        # surfaces a genuinely related paper or honestly returns nothing.
+        terms = query.split()
+        search_query = " AND ".join(f"all:{t}" for t in terms) if terms else f"all:{query}"
         params = {
-            "search_query": "all:" + query,
+            "search_query": search_query,
             "start": 0,
             "max_results": k,
+            "sortBy": "relevance",
+            "sortOrder": "descending",
         }
-        resp = httpx.get(
-            "https://export.arxiv.org/api/query",
-            params=params,
-            timeout=60,
-            follow_redirects=True,
-        )
-        if not (200 <= resp.status_code < 300):
-            raise RuntimeError(
-                f"arxiv search HTTP {resp.status_code}: {resp.text[:200]}"
+        # arXiv asks for ~1 request / 3s; back off and retry on 429 rate limiting.
+        resp = None
+        for attempt in range(3):
+            resp = httpx.get(
+                "https://export.arxiv.org/api/query",
+                params=params,
+                timeout=60,
+                follow_redirects=True,
             )
+            if resp.status_code != 429:
+                break
+            time.sleep(3 * (attempt + 1))
+        if resp is None or not (200 <= resp.status_code < 300):
+            code = resp.status_code if resp is not None else "no-response"
+            body = resp.text[:200] if resp is not None else ""
+            raise RuntimeError(f"arxiv search HTTP {code}: {body}")
         root = ET.fromstring(resp.text)
         results: list[dict] = []
         for entry in root.findall(f"{_ATOM}entry"):

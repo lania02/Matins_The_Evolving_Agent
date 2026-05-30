@@ -14,13 +14,56 @@ from ..store.db import Store
 from ..store.models import Idea
 
 
+# Generic words that hurt arXiv relevance ranking if left in the query.
+_STOPWORDS = {
+    "a", "an", "the", "of", "for", "and", "or", "to", "in", "on", "with", "via",
+    "using", "from", "by", "as", "at", "into", "under", "over", "is", "are", "be",
+    "this", "that", "analysis", "approach", "method", "methods", "towards",
+    "toward", "novel", "new", "study", "based", "framework",
+}
+
+
+# English terms annotated inside (parentheses) or （全角括号）, e.g. 谱半径(spectral radius).
+_PAREN_RE = re.compile(r"[(（]([^)）]*[A-Za-z][^)）]*)[)）]")
+
+
+def _english_terms(text: str) -> list[str]:
+    """Extract English technical terms annotated in parentheses (bilingual gloss)."""
+    out: list[str] = []
+    for inner in _PAREN_RE.findall(text or ""):
+        phrase = re.sub(r"[^A-Za-z0-9 \-]", " ", inner.split(",")[0])
+        phrase = re.sub(r"\s+", " ", phrase).strip()
+        if phrase:
+            out.append(phrase)
+    return out
+
+
 def _build_query(idea: Idea) -> str:
-    """Compose a search query from the idea title plus a few mechanism words."""
-    title = (idea.title or "").strip()
-    words = re.findall(r"[A-Za-z0-9\-]+", idea.mechanism or "")
-    extra = " ".join(words[:5])
-    query = (title + " " + extra).strip()
-    return query or title
+    """Build a focused English keyword query for arXiv.
+
+    With Chinese-primary output the title is Chinese, so we mine the English terms
+    the model annotates in parentheses across title/math/mechanism, plus any ASCII
+    acronyms. arXiv is an English corpus -- a Chinese query returns nothing useful.
+    Keywords are de-duplicated, stopword-filtered, and capped at four (the arXiv
+    adapter ANDs them, so fewer = less likely to over-constrain to zero hits).
+    """
+    blob = " ".join([idea.title or "", idea.math_structure or "", idea.mechanism or ""])
+    candidates: list[str] = []
+    for term in _english_terms(blob):
+        candidates.extend(term.split())
+    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9\-]+", idea.title or ""))
+
+    seen: set[str] = set()
+    words: list[str] = []
+    for w in candidates:
+        lw = w.lower()
+        if len(lw) < 2 or lw in _STOPWORDS or lw in seen:
+            continue
+        seen.add(lw)
+        words.append(w)
+
+    chosen = words[:4]
+    return " ".join(chosen) if chosen else (idea.title or "").strip()
 
 
 def attach_prior_art(

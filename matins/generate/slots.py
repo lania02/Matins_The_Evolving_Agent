@@ -42,11 +42,11 @@ def output_language_instruction(output_language: str) -> str:
         return "用中文撰写所有字段。保留必要的英文专有名词与数学符号。"
     if output_language == "en":
         return "Write all fields in English."
-    # bilingual (default)
+    # bilingual := Chinese-primary, with English annotated only for terms.
     return (
-        "Write each field bilingually: lead with the precise English term/phrasing, "
-        "then give a concise Chinese gloss in parentheses or on the next line. Keep "
-        "math notation and proper nouns in their canonical form."
+        "以中文为主撰写所有字段，正文不要整句使用英文。仅在专有名词或专业术语首次出现时，"
+        "用括号标注英文原文，例如：谱半径(spectral radius)、点过程(point process)。"
+        "数学符号、公式、模型名与 arXiv 分类号保持原样，不要翻译。"
     )
 
 
