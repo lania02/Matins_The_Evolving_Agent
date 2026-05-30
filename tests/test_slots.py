@@ -1,0 +1,69 @@
+"""Offline tests for slot prompt assembly + self-rank parsing (matins.generate.slots)."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from matins.generate.slots import (
+    build_generation_prompt,
+    parse_self_ranks,
+    render_template,
+    slot_temperature,
+)
+
+# Build the repo prompts path from this test file's location.
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+
+def test_slot_temperature_ordering_and_clamp() -> None:
+    base = 0.4
+    hi = slot_temperature(base, "highfit")
+    orth = slot_temperature(base, "orthogonal")
+    assert hi < orth <= 1.0
+    # Clamped into [0, 1] even for an aggressive base.
+    for slot in ("highfit", "adjacent", "orthogonal", "random"):
+        t = slot_temperature(2.0, slot)
+        assert 0.0 <= t <= 1.0
+
+
+def test_render_template_substitutes_token() -> None:
+    out = render_template("hello {{NAME}}", {"NAME": "world"})
+    assert out == "hello world"
+    assert "{{NAME}}" not in out
+
+
+def test_parse_self_ranks_parses_json_list_and_ignores_junk() -> None:
+    text = (
+        "some preamble that is not json\n"
+        '[{"idx": 1, "rank": 2, "rationale": "good"}, '
+        '{"idx": 2, "rank": 1, "rationale": "best"}]\n'
+        "trailing junk line"
+    )
+    ranks = parse_self_ranks(text, 2)
+    assert len(ranks) == 2
+    by_idx = {r["idx"]: r for r in ranks}
+    assert by_idx[1]["rank"] == 2
+    assert by_idx[2]["rank"] == 1
+    assert by_idx[2]["rationale"] == "best"
+
+
+def test_build_generation_prompt_substitutes_skill_and_strips_markers() -> None:
+    marker = "SKILL-SENTINEL-XYZZY"
+    context = {
+        "skill": marker,
+        "fast_memory": "recent likes",
+        "retrieval": [{"title": "Paper A", "url": "http://example/a"}],
+        "interest_seed": "phase transitions",
+    }
+    prompt = build_generation_prompt(
+        slot="highfit",
+        context=context,
+        prompts_dir=PROMPTS_DIR,
+        output_language="bilingual",
+        genes=None,
+    )
+    assert isinstance(prompt, str)
+    assert marker in prompt
+    # None of the double-brace token markers consumed by the assembler survive.
+    for token in ("{{TASTE_SKILL}}", "{{FAST_MEMORY}}", "{{RETRIEVAL}}",
+                  "{{INTEREST_SEED}}", "{{IDEA_SCHEMA}}", "{{OUTPUT_LANGUAGE}}"):
+        assert token not in prompt

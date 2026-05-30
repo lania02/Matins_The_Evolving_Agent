@@ -1,0 +1,29 @@
+You are proposing an update to the user's TASTE SKILL -- the slow, consolidated,
+human-approved model of what makes a research idea good FOR THIS USER. This runs on a
+slow cadence over a long, coarsely-sampled horizon, so its job is to capture STABLE,
+STRUCTURAL preferences and to denoise single-day fluctuations. A tired morning is not a
+preference; one divergent ranking is not a lesson.
+
+== CURRENT SKILL (the active version; may be an empty cold-start stub) ==
+{{CURRENT_SKILL}}
+
+== EVENTS (a long, coarsely-sampled log of ideas, self-ranks, user ranks, comments) ==
+{{EVENTS}}
+
+== TASK ==
+Produce the COMPLETE updated taste-skill document in Markdown -- not a diff, the full new
+content that should replace the current skill.
+
+Principles:
+- Only encode preferences with PERSISTENCE: a pattern visible across multiple batches /
+  multiple days, ideally reinforced by user comments. Discard one-off noise.
+- Favor STRUCTURAL preferences ("rewards an explicit isomorphism", "penalizes ideas with
+  no concrete first step", "likes contrarian framings") over transient TOPIC fashions
+  ("phase transitions this month"), since topics drift while structure is more stable.
+  Keep durable topic interests, but mark anything that looks like a passing fashion.
+- Preserve still-valid principles from the current skill; revise or remove ones the
+  recent evidence contradicts. Be conservative -- when in doubt, keep the prior wording.
+- Write it as clear, human-readable guidance an idea generator can condition on: a short
+  set of titled principles, each with a one-line justification grounded in the evidence.
+
+Output ONLY the new skill Markdown content. No diff markers, no preamble, no commentary.

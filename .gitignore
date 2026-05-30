@@ -1,0 +1,30 @@
+# Matins runtime artifacts
+data/
+*.db
+*.db-journal
+*.log
+
+# Local config with secrets / chat ids
+config.yaml
+
+# Per-user local Claude Code settings (keep shared .claude/settings.json if added)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Optional Node bridge
+bridges/whatsapp_baileys/node_modules/

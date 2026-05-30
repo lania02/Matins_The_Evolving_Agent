@@ -1,0 +1,187 @@
+"""Slot prompt assembly + self-rank (DESIGN.md section 6).
+
+Four slots (A high-fit / B adjacent-stretch / C orthogonal / D random-mutation)
+share a prompt-template + token-substitution scheme. Templates live in prompts/*.txt
+and use double-brace tokens ({{TASTE_SKILL}}, {{FAST_MEMORY}}, ...) so that literal
+JSON braces in the templates never collide with Python str.format.
+"""
+from __future__ import annotations
+
+import json
+import random
+from pathlib import Path
+
+import yaml
+
+from ..store.models import Idea
+from .schema import IDEA_FIELDS
+
+SLOT_PROMPT_FILES = {
+    "highfit": "slot_highfit.txt",
+    "adjacent": "slot_adjacent.txt",
+    "orthogonal": "slot_orthogonal.txt",
+    "random": "slot_random.txt",
+}
+
+# How far each slot departs from A, scaled by the config `temperature` knob (0..1).
+_SLOT_SPREAD = {"highfit": 0.0, "adjacent": 0.5, "orthogonal": 1.0, "random": 1.5}
+
+
+def slot_temperature(base: float, slot: str) -> float:
+    """Map the explore knob to a per-slot API sampling temperature, clamped to [0,1]."""
+    t = 0.2 + base * _SLOT_SPREAD.get(slot, 0.0)
+    return max(0.0, min(1.0, t))
+
+
+def load_prompt(prompts_dir: str | Path, filename: str) -> str:
+    return Path(prompts_dir, filename).read_text(encoding="utf-8")
+
+
+def output_language_instruction(output_language: str) -> str:
+    if output_language == "zh":
+        return "用中文撰写所有字段。保留必要的英文专有名词与数学符号。"
+    if output_language == "en":
+        return "Write all fields in English."
+    # bilingual (default)
+    return (
+        "Write each field bilingually: lead with the precise English term/phrasing, "
+        "then give a concise Chinese gloss in parentheses or on the next line. Keep "
+        "math notation and proper nouns in their canonical form."
+    )
+
+
+def _idea_schema_instruction() -> str:
+    keys = ", ".join(f for f in IDEA_FIELDS if f != "prior_art")
+    return (
+        "Return ONLY a single JSON object with these string keys: " + keys + ". "
+        "Use \"\" for math_structure if the idea has no real mathematical content "
+        "(an empty value is itself a signal). Do not include prior_art."
+    )
+
+
+def render_template(template: str, tokens: dict[str, str]) -> str:
+    out = template
+    for key, val in tokens.items():
+        out = out.replace("{{" + key + "}}", val or "")
+    return out
+
+
+def _format_retrieval(retrieval: list[dict]) -> str:
+    if not retrieval:
+        return "(no fresh retrieval configured)"
+    lines = []
+    for r in retrieval[:8]:
+        title = r.get("title", "").strip()
+        url = r.get("url", "").strip()
+        lines.append(f"- {title} {url}".rstrip())
+    return "\n".join(lines)
+
+
+def build_generation_prompt(
+    slot: str,
+    context: dict,
+    prompts_dir: str | Path,
+    output_language: str,
+    genes: dict | None = None,
+) -> str:
+    """Assemble the generation prompt for one slot.
+
+    `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed.
+    `genes` is the sampled (domain, method, constraint) triple for slot=random.
+    """
+    template = load_prompt(prompts_dir, SLOT_PROMPT_FILES[slot])
+    genes_str = ""
+    if genes:
+        genes_str = (
+            f"domain={genes.get('domain', '')}; "
+            f"method={genes.get('method', '')}; "
+            f"constraint={genes.get('constraint', '')}"
+        )
+    tokens = {
+        "OUTPUT_LANGUAGE": output_language_instruction(output_language),
+        "TASTE_SKILL": context.get("skill") or "(no taste skill yet -- cold start)",
+        "FAST_MEMORY": context.get("fast_memory") or "(no recent feedback yet)",
+        "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
+        "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
+        "IDEA_SCHEMA": _idea_schema_instruction(),
+        "GENES": genes_str,
+    }
+    return render_template(template, tokens)
+
+
+def build_self_rank_prompt(
+    ideas: list[Idea], prompts_dir: str | Path, output_language: str
+) -> str:
+    template = load_prompt(prompts_dir, "self_rank.txt")
+    blocks = []
+    for idea in ideas:
+        blocks.append(
+            f"#{idea.idx} [{idea.slot}] {idea.title}\n"
+            f"    mechanism: {idea.mechanism}\n"
+            f"    why_now: {idea.why_now}\n"
+            f"    tractability: {idea.tractability}"
+        )
+    tokens = {
+        "IDEAS": "\n\n".join(blocks),
+        "N": str(len(ideas)),
+        "OUTPUT_LANGUAGE": output_language_instruction(output_language),
+    }
+    return render_template(template, tokens)
+
+
+def parse_self_ranks(text: str, n: int) -> list[dict]:
+    """Tolerant-parse the self-rank reply into [{idx, rank, rationale}, ...].
+
+    Expects a JSON list. Returns [] if it cannot be recovered, in which case the
+    caller leaves self_rank unset (a single missing measurement is not fatal).
+    """
+    from .schema import strip_code_fences
+
+    raw = strip_code_fences(text)
+    try:
+        obj = json.loads(raw)
+    except (ValueError, TypeError):
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1:
+            return []
+        try:
+            obj = json.loads(raw[start : end + 1])
+        except (ValueError, TypeError):
+            return []
+    if not isinstance(obj, list):
+        return []
+    out = []
+    for item in obj:
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item.get("idx"))
+            rank = int(item.get("rank"))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= idx <= n:
+            out.append({"idx": idx, "rank": rank, "rationale": str(item.get("rationale", ""))})
+    return out
+
+
+# ---- random-mutation gene pool (slot D) ----------------------------------
+def load_genes(prompts_dir: str | Path) -> dict:
+    """Load the gene vocabulary from prompts/genes.yaml ({domain, method, constraint})."""
+    path = Path(prompts_dir, "genes.yaml")
+    if not path.exists():
+        return {"domain": [], "method": [], "constraint": []}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {
+        "domain": list(data.get("domain", [])),
+        "method": list(data.get("method", [])),
+        "constraint": list(data.get("constraint", [])),
+    }
+
+
+def sample_genes(pool: dict, rng: random.Random | None = None) -> dict:
+    """Sample one (domain, method, constraint) triple; empty string if a list is empty."""
+    r = rng or random
+    def pick(key: str) -> str:
+        opts = pool.get(key) or []
+        return r.choice(opts) if opts else ""
+    return {"domain": pick("domain"), "method": pick("method"), "constraint": pick("constraint")}

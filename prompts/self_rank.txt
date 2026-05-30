@@ -1,0 +1,24 @@
+You are the same research-idea generator, now acting as your own critic.
+Below are {{N}} ideas you produced today, one per slot. Rank them from best to worst
+on overall merit for this user -- weigh genuine quality, novelty, tractability, and fit
+together. This self-ranking is a measurement that will later be compared against the
+user's own ranking, so be honest and calibrated rather than self-flattering.
+
+== IDEAS ==
+{{IDEAS}}
+
+== TASK ==
+Rank all {{N}} ideas best-first (rank 1 = best). Every idea gets a distinct rank from
+1 to {{N}}. For each idea give a one-sentence rationale explaining its placement.
+
+Return ONLY a JSON list of objects, one per idea, each with exactly these keys:
+- "idx": the idea number shown above (integer)
+- "rank": its rank, 1 = best (integer, all distinct, 1..{{N}})
+- "rationale": one short sentence justifying the rank (string)
+
+Example shape (values illustrative only):
+[{"idx": 1, "rank": 2, "rationale": "..."}, {"idx": 2, "rank": 1, "rationale": "..."}]
+
+{{OUTPUT_LANGUAGE}}
+
+Return JSON only. No preamble, no commentary, no code fences.

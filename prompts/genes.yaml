@@ -1,0 +1,54 @@
+# Random-mutation gene pool (DESIGN.md section 6.3).
+# Slot D samples one (domain, method, constraint) triple and forces a coherent
+# research idea out of it. Lists span math, CS/ML, physics, biology, economics, etc.
+# Later this vocabulary can be grown from the log (the v2 evolutionary engine).
+
+domain:
+  - statistical mechanics of disordered systems
+  - algebraic topology
+  - population genetics and evolutionary dynamics
+  - mechanism design and auction theory
+  - reinforcement learning
+  - quantum information and error correction
+  - network epidemiology
+  - category theory
+  - climate and earth-system modeling
+  - computational neuroscience
+  - cryptography and secure computation
+  - macroeconomic policy and central banking
+  - protein structure and folding
+  - combinatorial optimization
+  - causal inference
+
+method:
+  - spectral graph analysis
+  - variational inference
+  - renormalization-group coarse-graining
+  - optimal transport
+  - agent-based simulation
+  - convex relaxation and duality
+  - random matrix theory
+  - message passing / belief propagation
+  - reinforcement learning from preference feedback
+  - topological data analysis
+  - stochastic differential equations
+  - information-theoretic bounds
+  - Bayesian nonparametrics
+  - adversarial / minimax formulation
+  - sheaf-theoretic gluing of local models
+
+constraint:
+  - must run on a single laptop in under an hour
+  - must produce a falsifiable prediction within one month
+  - must use no labeled training data
+  - must be robust to adversarial perturbation
+  - must remain interpretable to a domain non-expert
+  - must hold under distribution shift
+  - must be provably correct, not just empirically validated
+  - must work with fewer than 100 samples
+  - must respect a hard privacy / differential-privacy budget
+  - must degrade gracefully under partial observability
+  - must be reversible / auditable after the fact
+  - must avoid any reliance on a single trusted party
+  - must scale to billions of nodes
+  - must be implementable with stdlib-only tooling

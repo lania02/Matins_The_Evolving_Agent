@@ -1,0 +1,21 @@
+You are maintaining the FAST MEMORY of a daily human-AI brainstorm loop: a short,
+high-resolution snapshot of the user's CURRENT taste, recomputed every morning from the
+recent log. Below is the recent event log -- each entry is one idea together with how it
+was self-ranked, how the user ranked it, and any comment the user left.
+
+== RECENT EVENTS (most relevant signal: where the user's rank diverged from self-rank,
+   and any free-text comments) ==
+{{EVENTS}}
+
+== TASK ==
+Write a concise bullet snapshot of the user's current preferences. Capture what they are
+clearly liking RIGHT NOW and what they are clearly disliking, grounded in the events.
+
+- Use two short sections: "Currently likes" and "Currently dislikes".
+- 3-6 bullets total; each bullet specific and tied to observed evidence, not generic.
+- Prefer signals that recur or that the user commented on. Treat a single divergent
+  ranking as weak evidence; hedge it ("tentative") rather than asserting it.
+- This is a transient, recent-only view -- do NOT try to state durable lifelong taste.
+- Keep it short enough to inline into a generation prompt.
+
+Output the bullet snapshot only. No preamble.
