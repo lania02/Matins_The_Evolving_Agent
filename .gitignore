@@ -13,6 +13,9 @@ config.yaml
 # Personal curated-ideas mirror (derived from the DB; contains your research ideas)
 favorites.md
 
+# On-demand deep-dive briefings (derived; contain your research ideas)
+deep_dives/
+
 # Python
 __pycache__/
 *.py[cod]

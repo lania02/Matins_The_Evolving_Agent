@@ -166,3 +166,53 @@ class WebSearchProvider:
             return parser.results[:k]
         except Exception:
             return []
+
+
+class TavilySearchProvider:
+    """Web search via the Tavily API (purpose-built for LLM grounding).
+
+    Returns clean content snippets ready to cite. On any error returns [] so the
+    deep dive degrades gracefully to arXiv-only.
+    """
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def search(self, query: str, *, k: int = 5) -> list[dict]:
+        if not self.api_key:
+            return []
+        try:
+            resp = httpx.post(
+                "https://api.tavily.com/search",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "api_key": self.api_key,  # also accepted in body for older keys
+                    "query": query,
+                    "max_results": k,
+                    "search_depth": "advanced",
+                    "include_answer": False,
+                },
+                timeout=60,
+            )
+            if not (200 <= resp.status_code < 300):
+                return []
+            results = resp.json().get("results", []) or []
+            out = []
+            for r in results:
+                out.append({
+                    "title": (r.get("title") or "").strip(),
+                    "url": (r.get("url") or "").strip(),
+                    "snippet": _collapse(r.get("content") or "", limit=500),
+                })
+            return out
+        except Exception:
+            return []
+
+
+def get_web_searcher(cfg) -> SearchProvider | None:
+    """Web searcher for the deep dive (Tavily), or None when unconfigured/keyless."""
+    if cfg.deep_dive.web_search == "tavily":
+        key = cfg.deep_dive_web_key()
+        if key:
+            return TavilySearchProvider(key)
+    return None

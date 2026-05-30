@@ -23,6 +23,8 @@ _COMMENT_LINE = re.compile(r"^\s*#\s*(\d+)\s*(.*)$")
 # A 'must try #N' marker -> copy idea N into the curated favorites.
 # Tolerates 'must try 3', 'must-try #3', 'musttry#3' (case-insensitive).
 _MUST_TRY_RE = re.compile(r"must[\s\-]?try\s*#?\s*(\d+)", re.IGNORECASE)
+# A 'dig #N' / 'deep dive #N' marker -> run an on-demand deep-dive briefing.
+_DIG_RE = re.compile(r"\b(?:dig|deep[\s\-]?dive)\b\s*#?\s*(\d+)", re.IGNORECASE)
 
 
 def parse_ranking(
@@ -126,6 +128,17 @@ def parse_must_try(text: str, n_ideas: int) -> list[int]:
     de-duplicated, bounded to 1..n_ideas. Tolerant; never raises."""
     out: list[int] = []
     for m in _MUST_TRY_RE.finditer(text or ""):
+        idx = int(m.group(1))
+        if 1 <= idx <= n_ideas and idx not in out:
+            out.append(idx)
+    return out
+
+
+def parse_dig(text: str, n_ideas: int) -> list[int]:
+    """Extract idea indices flagged 'dig #N' / 'deep dive #N', de-duplicated,
+    bounded to 1..n_ideas. Tolerant; never raises."""
+    out: list[int] = []
+    for m in _DIG_RE.finditer(text or ""):
         idx = int(m.group(1))
         if 1 <= idx <= n_ideas and idx not in out:
             out.append(idx)

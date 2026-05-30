@@ -1,0 +1,19 @@
+You are preparing to research one research idea so a busy researcher can judge it
+without searching themselves. Decompose the idea into the distinct things that must
+be checked in the literature / on the web.
+
+The idea:
+{{IDEA}}
+
+Produce up to {{N}} focused SEARCH QUERIES that together cover:
+- the core concept(s) the researcher likely already knows,
+- the concept(s) that may be outside their expertise (the blind spot to explain),
+- whether this specific COMBINATION has already been done (prior art),
+- feasibility / known results for the proposed approach.
+
+Rules:
+- Queries MUST be in English (the corpora are English), even if the idea is in another language.
+- Each query is a short keyword phrase (2-7 words), not a sentence.
+- Make them distinct (don't repeat the same terms).
+
+Return ONLY a JSON array of strings, e.g. ["spectral radius market microstructure", "renormalization group economics"]. No prose, no code fences.

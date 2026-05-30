@@ -36,4 +36,11 @@ retrieval:
   sources: []                # arXiv categories / venues / feeds; seed from your interests
   dedup_against_days: 30
 
+deep_dive:                   # on-demand `dig #N` grounded briefings
+  model: gemini-3.5-flash    # stronger model for synthesis; "" = use provider.model
+  web_search: tavily         # tavily | none
+  web_api_key_env: TAVILY_API_KEY
+  k_per_query: 5
+  max_queries: 4
+
 interest_seed_file: prompts/interest_seed.md

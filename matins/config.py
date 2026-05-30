@@ -68,6 +68,15 @@ class RetrievalCfg:
     dedup_against_days: int = 30
 
 
+@dataclass
+class DeepDiveCfg:
+    model: str = "gemini-3.5-flash"      # stronger model for on-demand briefings; "" = provider.model
+    web_search: str = "tavily"           # tavily | none
+    web_api_key_env: str = "TAVILY_API_KEY"
+    k_per_query: int = 5
+    max_queries: int = 4
+
+
 DEFAULT_KERNELS = [
     MemoryKernelCfg("fast", 7, 1, "llm_summarize_recent", "generation"),
     MemoryKernelCfg("slow", 75, 5, "llm_propose_skill_diff", "consolidation"),
@@ -83,6 +92,7 @@ class Config:
     memory_kernels: list[MemoryKernelCfg] = field(default_factory=lambda: list(DEFAULT_KERNELS))
     consolidation: ConsolidationCfg = field(default_factory=ConsolidationCfg)
     retrieval: RetrievalCfg = field(default_factory=RetrievalCfg)
+    deep_dive: DeepDiveCfg = field(default_factory=DeepDiveCfg)
     interest_seed_file: str = "prompts/interest_seed.md"
     # Runtime-resolved, not from YAML:
     root: Path = field(default_factory=lambda: Path("."))
@@ -116,6 +126,16 @@ class Config:
 
     def favorites_path(self) -> Path:
         return self.root / "favorites.md"
+
+    def deep_dives_dir(self) -> Path:
+        return self.root / "deep_dives"
+
+    def deep_dive_web_key(self) -> str | None:
+        return os.environ.get(self.deep_dive.web_api_key_env)
+
+    def dig_model(self) -> str:
+        """Model for on-demand deep dives (falls back to the main provider model)."""
+        return self.deep_dive.model or self.provider.model
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
@@ -187,6 +207,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         memory_kernels=kernels,
         consolidation=ConsolidationCfg(**(data.get("consolidation") or {})),
         retrieval=RetrievalCfg(**(data.get("retrieval") or {})),
+        deep_dive=DeepDiveCfg(**(data.get("deep_dive") or {})),
         interest_seed_file=data.get("interest_seed_file", "prompts/interest_seed.md"),
         root=(p.parent if p.parent != Path("") else Path(".")),
     )

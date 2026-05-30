@@ -31,6 +31,29 @@ def _open_store(cfg: Config) -> Store:
     return Store(cfg.db_path())
 
 
+def _send_long(messaging, text: str, limit: int = 3500) -> None:
+    """Send a long message as several chunks (Telegram caps each at 4096 chars)."""
+    chunks: list[str] = []
+    cur = ""
+    for para in text.split("\n"):
+        while len(para) > limit:
+            if cur:
+                chunks.append(cur)
+                cur = ""
+            chunks.append(para[:limit])
+            para = para[limit:]
+        if len(cur) + len(para) + 1 > limit:
+            if cur:
+                chunks.append(cur)
+            cur = para
+        else:
+            cur = (cur + "\n" + para) if cur else para
+    if cur:
+        chunks.append(cur)
+    for c in chunks:
+        messaging.send(c)
+
+
 # ---- matins run ----------------------------------------------------------
 def cmd_run(args) -> int:
     from .digest.render import render_digest
@@ -101,6 +124,28 @@ def cmd_collect(args) -> int:
             render_favorites_md(store.list_favorites()), encoding="utf-8"
         )
         print(f"added {len(favs)} idea(s) to favorites -> {cfg.favorites_path()}")
+
+    from .feedback.capture import parse_dig
+    ideas_by_idx = {i.idx: i for i in store.ideas_for_batch(batch.batch_id)}
+    dig_text = "\n".join(r.get("text", "") for r in replies)
+    for idx in parse_dig(dig_text, len(ideas_by_idx)):
+        idea = ideas_by_idx.get(idx)
+        if idea is None:
+            continue
+        print(f"deep-diving #{idx} (this may take a moment)...")
+        from .generate.deepdive import run_deep_dive, write_brief_md
+        try:
+            result = run_deep_dive(cfg, store, idea)
+        except Exception as e:
+            print(f"[warning] deep dive #{idx} failed: {e}")
+            continue
+        path = write_brief_md(cfg, idea, result["brief"])
+        print(f"deep dive #{idx} -> {path} ({len(result['sources'])} sources)")
+        if messaging is not None:
+            try:
+                _send_long(messaging, f"🔬 Deep dive #{idx}: {idea.title}\n\n{result['brief']}")
+            except Exception as e:
+                print(f"[warning] could not send deep dive #{idx}: {e}")
     return 0
 
 
@@ -177,6 +222,38 @@ def cmd_favorites(args) -> int:
     return 0
 
 
+# ---- matins dig ----------------------------------------------------------
+def cmd_dig(args) -> int:
+    from .generate.deepdive import run_deep_dive, write_brief_md
+
+    cfg = _bootstrap(args)
+    store = _open_store(cfg)
+    batch = store.batch_for_date(args.date) if args.date else store.latest_batch()
+    if batch is None:
+        print("no batch found; run `matins run` first.")
+        return 1
+    ideas = {i.idx: i for i in store.ideas_for_batch(batch.batch_id)}
+    idea = ideas.get(args.n)
+    if idea is None:
+        print(f"no idea #{args.n} in batch {batch.date}.")
+        return 1
+    print(f"deep-diving #{args.n}: {idea.title}")
+    print(f"(arxiv + web search, synthesizing with {cfg.dig_model()} — this may take a moment)\n")
+    result = run_deep_dive(cfg, store, idea)
+    print(result["brief"])
+    path = write_brief_md(cfg, idea, result["brief"])
+    print(f"\n[saved {path}; {len(result['sources'])} sources]")
+    if args.send:
+        messaging = get_messaging_provider(cfg)
+        if messaging is not None:
+            try:
+                _send_long(messaging, f"🔬 Deep dive #{args.n}: {idea.title}\n\n{result['brief']}")
+                print("[sent to telegram]")
+            except Exception as e:
+                print(f"[warning] could not send: {e}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="matins", description="A daily human-AI brainstorm loop.")
     p.add_argument("--version", action="version", version=f"matins {__version__}")
@@ -204,6 +281,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     pfav = sub.add_parser("favorites", help="list curated 'must try' ideas (refreshes favorites.md)")
     pfav.set_defaults(func=cmd_favorites)
+
+    pd = sub.add_parser("dig", help="deep-dive briefing for one idea (arxiv + web, cited)")
+    pd.add_argument("n", type=int, help="idea number to deep-dive")
+    pd.add_argument("--date", default=None, help="batch date (default: latest)")
+    pd.add_argument("--send", action="store_true", help="also push the brief to the channel")
+    pd.set_defaults(func=cmd_dig)
 
     return p
 

@@ -7,6 +7,7 @@ provider's optional dependencies never need to be installed.
 """
 from __future__ import annotations
 
+import dataclasses
 from typing import Protocol, runtime_checkable
 
 from ..config import Config
@@ -32,8 +33,14 @@ class SearchProvider(Protocol):
         ...
 
 
-def get_llm_provider(cfg: Config) -> LLMProvider:
-    """Instantiate the configured LLM adapter."""
+def get_llm_provider(cfg: Config, model: str | None = None) -> LLMProvider:
+    """Instantiate the configured LLM adapter.
+
+    `model` optionally overrides cfg.provider.model (used by the deep-dive, which
+    runs on a stronger model than the daily generation) without mutating cfg.
+    """
+    if model and model != cfg.provider.model:
+        cfg = dataclasses.replace(cfg, provider=dataclasses.replace(cfg.provider, model=model))
     name = cfg.provider.name
     if name == "anthropic":
         from .anthropic import AnthropicProvider

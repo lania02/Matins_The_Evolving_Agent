@@ -86,6 +86,13 @@ CREATE TABLE IF NOT EXISTS favorites (
   note       TEXT,
   created_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS deep_dives (
+  idea_id    TEXT PRIMARY KEY REFERENCES ideas(idea_id),
+  brief      TEXT,
+  sources    TEXT,
+  created_at TEXT
+);
 """
 
 
@@ -388,3 +395,19 @@ class Store:
             idea = Idea(**{k: v for k, v in d.items() if k in Idea.__dataclass_fields__})
             out.append((idea, note, fav_at))
         return out
+
+    # ---- deep dives (on-demand grounded briefings) -----------------------
+    def save_deep_dive(self, idea_id: str, brief: str, sources_json: str = "[]") -> None:
+        self.conn.execute(
+            """INSERT INTO deep_dives (idea_id, brief, sources, created_at) VALUES (?,?,?,?)
+               ON CONFLICT(idea_id) DO UPDATE SET
+                 brief=excluded.brief, sources=excluded.sources, created_at=excluded.created_at""",
+            (idea_id, brief, sources_json, now_iso()),
+        )
+        self.conn.commit()
+
+    def get_deep_dive(self, idea_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT brief, sources, created_at FROM deep_dives WHERE idea_id=?", (idea_id,)
+        ).fetchone()
+        return dict(row) if row else None

@@ -1,0 +1,31 @@
+You are a rigorous research analyst. A researcher flagged the idea below as
+intriguing but cannot judge it because it touches a gap in their knowledge. Write a
+grounded briefing that lets them judge it WITHOUT searching themselves.
+
+You may ONLY rely on the numbered SOURCES provided. Do not invent facts, papers, or
+results. Every non-obvious claim must cite a source as [n]. If the sources do not
+cover something important, say so explicitly under "Unverified / to check" rather
+than guessing.
+
+THE IDEA:
+{{IDEA}}
+
+SOURCES (the only evidence you may cite; each is a real search result):
+{{SOURCES}}
+
+Write the briefing with these sections (use these as headings):
+1. 盲区扫盲 (Blind-spot primer): in plain language, explain the concept(s) in this
+   idea that a non-expert would not know. Cite [n] where grounded.
+2. 先例核查 (Prior art / has this been done?): the closest real work in the sources,
+   what each did, and how this idea differs or overlaps. Cite [n] for every claim.
+3. 新颖性判定 (Novelty verdict): is the specific combination fresh, incremental, or
+   already done? Base this ONLY on the sources; state your confidence and what would
+   change the verdict.
+4. 可行性 + 先读清单 (Feasibility & what to read first): 2-3 sources to read first
+   (by [n]) and the key open questions.
+5. Unverified / to check: anything you could NOT confirm from the sources, so the
+   researcher knows the residual risk.
+
+End with a "Sources" list mapping each [n] to its title and URL.
+
+{{OUTPUT_LANGUAGE}}
