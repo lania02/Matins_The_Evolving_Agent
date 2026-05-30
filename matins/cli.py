@@ -179,7 +179,20 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _force_utf8_stdout() -> None:
+    """Make stdout/stderr UTF-8 so bilingual (Chinese) and math (e.g. rho) output
+    prints on a Windows cp1252 console instead of raising UnicodeEncodeError."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdout()
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
