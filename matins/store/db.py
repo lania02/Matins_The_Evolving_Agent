@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS messaging_state (
   channel TEXT PRIMARY KEY,
   last_update_id TEXT
 );
+
+CREATE TABLE IF NOT EXISTS favorites (
+  idea_id    TEXT PRIMARY KEY REFERENCES ideas(idea_id),
+  note       TEXT,
+  created_at TEXT
+);
 """
 
 
@@ -350,3 +356,35 @@ class Store:
             (channel, last_update_id),
         )
         self.conn.commit()
+
+    # ---- favorites (curated "must try" ideas) ----------------------------
+    def add_favorite(self, idea_id: str, note: str = "") -> bool:
+        """Copy an idea into the curated favorites. Returns True if newly added,
+        False if it was already a favorite (idempotent)."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO favorites (idea_id, note, created_at) VALUES (?,?,?)",
+            (idea_id, note, now_iso()),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def is_favorite(self, idea_id: str) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM favorites WHERE idea_id=? LIMIT 1", (idea_id,)
+        ).fetchone() is not None
+
+    def list_favorites(self) -> list[tuple[Idea, str, str]]:
+        """Return [(Idea, note, favorited_at)], newest first."""
+        rows = self.conn.execute(
+            """SELECT i.*, f.note AS fav_note, f.created_at AS fav_created_at
+               FROM favorites f JOIN ideas i ON i.idea_id = f.idea_id
+               ORDER BY f.created_at DESC"""
+        ).fetchall()
+        out: list[tuple[Idea, str, str]] = []
+        for r in rows:
+            d = dict(r)
+            note = d.pop("fav_note", "") or ""
+            fav_at = d.pop("fav_created_at", "") or ""
+            idea = Idea(**{k: v for k, v in d.items() if k in Idea.__dataclass_fields__})
+            out.append((idea, note, fav_at))
+        return out

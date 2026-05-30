@@ -65,3 +65,36 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
         messages.append(_truncate("\n".join(lines)))
 
     return header, messages
+
+
+def render_favorites_md(favorites) -> str:
+    """Render curated favorites -- a list of (Idea, note, favorited_at) tuples --
+    as a human-readable markdown document (the favorites.md mirror)."""
+    if not favorites:
+        return (
+            "# ⭐ Matins favorites\n\n"
+            "(none yet — reply `must try #N` to a digest, then run `matins collect`.)\n"
+        )
+
+    out = ["# ⭐ Matins favorites", "", f"{len(favorites)} curated idea(s), newest first.", ""]
+    for idea, note, fav_at in favorites:
+        label = SLOT_LABELS.get(idea.slot, idea.slot)
+        out.append(f"## {idea.title}")
+        out.append(f"_[{label}] · generated {(idea.created_at or '')[:10]} · saved {fav_at[:10]}_")
+        if note:
+            out.append("")
+            out.append(f"> {note}")
+        out.append("")
+        for field_label, value in (
+            ("Mechanism", idea.mechanism),
+            ("Why now", idea.why_now),
+            ("Math structure", idea.math_structure),
+            ("Tractability", idea.tractability),
+            ("Fit to program", idea.fit_to_program),
+            ("Prior art", idea.prior_art),
+        ):
+            value = (value or "").strip()
+            if value:
+                out.append(f"- **{field_label}:** {value}")
+        out.append("")
+    return "\n".join(out)

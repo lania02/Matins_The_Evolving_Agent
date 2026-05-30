@@ -69,7 +69,7 @@ def cmd_run(args) -> int:
 
 # ---- matins collect ------------------------------------------------------
 def cmd_collect(args) -> int:
-    from .feedback.capture import ingest_replies
+    from .feedback.capture import ingest_must_try, ingest_replies
     from .feedback.diverge import reflect_on_batch
 
     cfg = _bootstrap(args)
@@ -93,6 +93,14 @@ def cmd_collect(args) -> int:
     llm = get_llm_provider(cfg)
     tau = reflect_on_batch(cfg, store, llm, batch)
     print(f"ingested {n} feedback row(s); self-vs-user tau = {tau}")
+
+    favs = ingest_must_try(store, batch, replies)
+    if favs:
+        from .digest.render import render_favorites_md
+        cfg.favorites_path().write_text(
+            render_favorites_md(store.list_favorites()), encoding="utf-8"
+        )
+        print(f"added {len(favs)} idea(s) to favorites -> {cfg.favorites_path()}")
     return 0
 
 
@@ -151,6 +159,24 @@ def cmd_init_telegram(args) -> int:
     return 0
 
 
+# ---- matins favorites ----------------------------------------------------
+def cmd_favorites(args) -> int:
+    from .digest.render import render_favorites_md
+
+    cfg = _bootstrap(args)
+    store = _open_store(cfg)
+    favs = store.list_favorites()
+    # Always refresh the human-readable mirror so it never goes stale.
+    cfg.favorites_path().write_text(render_favorites_md(favs), encoding="utf-8")
+    if not favs:
+        print("no favorites yet. Reply 'must try #N' to a digest, then run `matins collect`.")
+        return 0
+    print(f"{len(favs)} favorite(s)  (full text in {cfg.favorites_path()}):\n")
+    for idea, _note, fav_at in favs:
+        print(f"  * [{idea.slot}] {idea.title}   (saved {fav_at[:10]})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="matins", description="A daily human-AI brainstorm loop.")
     p.add_argument("--version", action="version", version=f"matins {__version__}")
@@ -175,6 +201,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pi = sub.add_parser("init-telegram", help="discover your Telegram chat_id")
     pi.set_defaults(func=cmd_init_telegram)
+
+    pfav = sub.add_parser("favorites", help="list curated 'must try' ideas (refreshes favorites.md)")
+    pfav.set_defaults(func=cmd_favorites)
 
     return p
 

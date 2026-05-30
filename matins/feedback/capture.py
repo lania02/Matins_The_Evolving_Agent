@@ -20,6 +20,9 @@ from ..store.models import Feedback
 _RANK_LINE = re.compile(r"^\s*\d+(?:\s*>\s*\d+)+\s*$")
 # A comment line: '#<n> <text>'.
 _COMMENT_LINE = re.compile(r"^\s*#\s*(\d+)\s*(.*)$")
+# A 'must try #N' marker -> copy idea N into the curated favorites.
+# Tolerates 'must try 3', 'must-try #3', 'musttry#3' (case-insensitive).
+_MUST_TRY_RE = re.compile(r"must[\s\-]?try\s*#?\s*(\d+)", re.IGNORECASE)
 
 
 def parse_ranking(
@@ -68,7 +71,8 @@ def parse_ranking(
         if not m:
             continue
         idx = int(m.group(1))
-        body = m.group(2).strip()
+        # Strip a leading ':' / '：' so '#1: note' yields 'note', not ': note'.
+        body = m.group(2).strip().lstrip(":：").strip()
         if 1 <= idx <= n_ideas:
             comments[idx] = body
         else:
@@ -115,3 +119,33 @@ def ingest_replies(store, batch, replies, source: str = "telegram") -> int:
 def ingest_cli_feedback(store, batch, text: str, source: str = "cli") -> int:
     """Ingest a single free-text blob (typed at the CLI) as feedback."""
     return _ingest_text(store, batch, text, source)
+
+
+def parse_must_try(text: str, n_ideas: int) -> list[int]:
+    """Extract idea indices flagged 'must try #N' (curated favorites), in order,
+    de-duplicated, bounded to 1..n_ideas. Tolerant; never raises."""
+    out: list[int] = []
+    for m in _MUST_TRY_RE.finditer(text or ""):
+        idx = int(m.group(1))
+        if 1 <= idx <= n_ideas and idx not in out:
+            out.append(idx)
+    return out
+
+
+def ingest_must_try(store, batch, replies) -> list:
+    """Copy ideas flagged 'must try #N' in `replies` into the curated favorites.
+
+    Returns the list of Idea objects newly added (ideas already favorited are
+    skipped, so re-collecting the same reply is idempotent).
+    """
+    if not replies:
+        return []
+    text = "\n".join(r.get("text", "") for r in replies)
+    ideas = store.ideas_for_batch(batch.batch_id)
+    by_idx = {i.idx: i for i in ideas}
+    added = []
+    for idx in parse_must_try(text, len(ideas)):
+        idea = by_idx.get(idx)
+        if idea is not None and store.add_favorite(idea.idea_id):
+            added.append(idea)
+    return added

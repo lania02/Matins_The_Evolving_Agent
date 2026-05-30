@@ -114,6 +114,9 @@ class Config:
     def db_path(self) -> Path:
         return self.root / "data" / "matins.db"
 
+    def favorites_path(self) -> Path:
+        return self.root / "favorites.md"
+
 
 def _parse_env_file(path: Path) -> dict[str, str]:
     """Parse a simple KEY=VALUE .env file. Ignores blanks, # comments, and a
