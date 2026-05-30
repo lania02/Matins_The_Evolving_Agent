@@ -115,13 +115,52 @@ class Config:
         return self.root / "data" / "matins.db"
 
 
+def _parse_env_file(path: Path) -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file. Ignores blanks, # comments, and a
+    leading `export `. Strips one layer of matching surrounding quotes."""
+    out: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+            val = val[1:-1]
+        if key:
+            out[key] = val
+    return out
+
+
+def load_dotenv(*candidates: Path, override: bool = False) -> Path | None:
+    """Load the first existing .env candidate into os.environ (zero-dependency).
+
+    By default existing OS environment variables win (override=False), matching
+    python-dotenv. Returns the file that was loaded, or None.
+    """
+    for cand in candidates:
+        if cand and cand.exists():
+            for key, val in _parse_env_file(cand).items():
+                if override or key not in os.environ:
+                    os.environ[key] = val
+            return cand
+    return None
+
+
 def load_config(path: str | Path = "config.yaml") -> Config:
     """Load config from YAML, falling back to defaults for any missing block.
 
     Unknown top-level blocks are ignored; missing blocks use dataclass defaults,
-    so a minimal or empty config file still yields a working Config.
+    so a minimal or empty config file still yields a working Config. A `.env` file
+    next to the config (or in the cwd) is loaded first so that api_key_env /
+    bot_token_env lookups can resolve from it.
     """
     p = Path(path)
+    load_dotenv(Path(".env"), p.parent / ".env")
     data: dict = {}
     if p.exists():
         loaded = yaml.safe_load(p.read_text(encoding="utf-8"))

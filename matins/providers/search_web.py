@@ -54,7 +54,10 @@ class ArxivSearchProvider:
             "max_results": k,
         }
         resp = httpx.get(
-            "http://export.arxiv.org/api/query", params=params, timeout=60
+            "https://export.arxiv.org/api/query",
+            params=params,
+            timeout=60,
+            follow_redirects=True,
         )
         if not (200 <= resp.status_code < 300):
             raise RuntimeError(

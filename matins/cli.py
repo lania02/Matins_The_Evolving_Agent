@@ -51,12 +51,19 @@ def cmd_run(args) -> int:
 
     messaging = get_messaging_provider(cfg)
     if messaging is not None:
-        digest_msg_id = messaging.send(header)
-        for m in idea_msgs:
-            messaging.send(m)
-        if digest_msg_id:
-            store.set_batch_digest_msg_id(batch.batch_id, digest_msg_id)
-        print(f"\n[sent digest to {cfg.messaging.channel}]")
+        try:
+            digest_msg_id = messaging.send(header)
+            for m in idea_msgs:
+                messaging.send(m)
+            if digest_msg_id:
+                store.set_batch_digest_msg_id(batch.batch_id, digest_msg_id)
+            print(f"\n[sent digest to {cfg.messaging.channel}]")
+        except Exception as e:
+            # The batch is already generated, ranked, and stored above; a delivery
+            # failure should not discard that work or dump a traceback on a cron run.
+            print(f"\n[warning] could not send to {cfg.messaging.channel}: {e}")
+            print("[hint] batch saved. Set messaging.telegram.chat_id (run "
+                  "`matins init-telegram`), or set messaging.channel: none.")
     return 0
 
 

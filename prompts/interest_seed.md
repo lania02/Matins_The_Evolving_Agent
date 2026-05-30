@@ -1,50 +1,71 @@
 # Interest Seed
 
 <!--
-  This file seeds the daily brainstorm with your standing research interests.
-  It is injected into every generation prompt (the {{INTEREST_SEED}} token).
-  Fill in each section below, replacing the <!-- fill me in --> markers.
-  Be concrete and specific -- vague entries produce vague ideas. You can revise
-  this any time; changes take effect on the next `matins run`.
+  Standing research interests, injected into every generation prompt as {{INTEREST_SEED}}.
+  Revise any time; changes take effect on the next `matins run`.
 -->
 
 ## Research areas
-<!--
-  The fields / topics you actually care about. List a handful, most-central first.
-  e.g. "adaptive governance and the Lucas critique", "evolutionary market design",
-  "out-of-distribution generalization in ML".
--->
-<!-- fill me in -->
+<!-- most-central first -->
+1. **Evolutionary Mechanism Design (EMD)** — AlphaEvolve-style, LLM-guided search over
+   mechanism-design spaces; mechanism discovery framed as program search. MVP target:
+   combinatorial-auction discovery. (PhD anchor.)
+2. **Critical phenomena in social & multi-agent systems** — spectral stability conditions
+   (ρ(J) < 1), bifurcations, hysteresis, and supercritical regimes; endogenous interaction
+   topology (W) under algorithmic curation.
+3. **Self-exciting point processes** — multivariate Hawkes models of trust and influence
+   dynamics; state augmentation to Markovianize non-Markovian intensities.
+4. **Computational autopoiesis & viability** in artificial life (the CA1–CA5 framework).
+5. **Adaptive governance & automated policy formulation** — reflexivity and the Lucas
+   critique in self-updating policy; the AI-governance sandbox.
+6. **LLM-based multi-agent social simulation** validated against agent-based models
+   (disciplinary-policymaker agents vs. the Barcelona ABM).
+7. **Self-evolving / self-improving AI systems** — mechanisms and taxonomy.
 
 ## Preferred problem types
-<!--
-  What KIND of problem excites you, independent of topic. This is the structural
-  signal the system most wants. e.g. "problems with an explicit isomorphism to a
-  solved problem", "mechanism-design problems with a clean first concrete step",
-  "anything where a falsifiable prediction is reachable in weeks".
--->
-<!-- fill me in -->
+- An **explicit, structure-preserving isomorphism** between a mature formalism (statistical
+  mechanics, bifurcation theory, point processes, mechanism design) and an under-modeled
+  target — where the import is a *theorem*, not a metaphor.
+- Problems whose core reduces to a **precise, computable/measurable object**: an order
+  parameter, a spectral threshold, a critical manifold, a hysteresis loop.
+- Problems where a **falsifiable prediction or observable signature is reachable in weeks**,
+  and where separating true signal from measurement artifact is itself part of the work.
+- Problems with a **cheap minimal test that decides "theorem or vibe" fast** (a toy model,
+  a held-out backtest).
+- **Contrarian framings** that invert a dominant narrative yet survive a prior-art check.
+- Problems that **open into a layered framework**, not single-point fixes.
 
 ## arXiv categories
-<!--
-  Categories to weight for retrieval and framing. Use canonical codes.
-  Examples: cs.LG (machine learning), math.PR (probability), stat.ML,
-  econ.TH (economic theory), q-bio.PE (populations & evolution), cond-mat.dis-nn.
--->
-<!-- fill me in -->
+- `cs.MA` — multiagent systems (EMD, agent simulation)
+- `cs.GT` — game theory & mechanism design
+- `econ.TH` — economic theory (mechanism design, Lucas critique)
+- `physics.soc-ph` — physics of social systems (opinion dynamics, phase transitions)
+- `cond-mat.stat-mech` — statistical mechanics (critical phenomena, supercritical, Widom line)
+- `math.PR` — probability (Hawkes / point processes)
+- `cs.SI` — social & information networks (algorithmic curation)
+- `cs.NE` — neural & evolutionary computing (evolutionary search)
+- `nlin.AO` — adaptation & self-organizing systems (ALife, autopoiesis)
+- `cs.AI`, `cs.LG` — LLM agents, self-evolving systems (broad; weight lower)
 
 ## Venues / feeds
-<!--
-  Conferences, journals, blogs, or RSS feeds worth tracking for `why_now`.
-  e.g. "NeurIPS", "Journal of Economic Theory", "Quanta Magazine",
-  "<some researcher>'s blog".
--->
-<!-- fill me in -->
+- **AAMAS**, **ACM EC** (Economics & Computation) — mechanism design & multi-agent (EMD's home)
+- **AAAI**, **IJCAI** — broad AI; IJCAI was the Barcelona ABM venue
+- **AIES** (AAAI/ACM) — trust-dynamics & governance angle
+- **IAAI "Emerging Applications"** — applied AI4SG
+- **ALIFE** conference + **Artificial Life** (journal) — computational autopoiesis
+- **NeurIPS**, **ICML** — LLM-agent and self-evolving methods
+- **Physical Review E** — statistical physics of social/complex systems
+- **Journal of Economic Theory**, **Games and Economic Behavior** — mechanism-design theory
+- **Quanta Magazine** — cross-disciplinary trend radar for `why_now`
 
 ## Things to avoid
-<!--
-  Topics, methods, or framings you do NOT want to see (so even the contrarian slot
-  knows the real boundary it is testing). e.g. "no pure prompt-engineering tricks",
-  "avoid finance day-trading", "no ideas requiring proprietary datasets".
--->
-<!-- fill me in -->
+- **Metaphor-only** cross-domain mappings that import no precise structure — the "novel
+  metaheuristic" / costume-swap trap.
+- Ideas **already standard in a mature field** (bifurcation/catastrophe theory, numerical
+  continuation, cluster MCMC, edge-of-chaos) repackaged as new.
+- Pure **prompt-engineering tricks** or LLM-wrangling hacks.
+- Anything needing **proprietary datasets, large-scale pretraining, or heavy compute**.
+- **Finance day-trading / investment-signal** framings.
+- **Purely descriptive empirical** studies with no underlying formal object or falsifiable mechanism.
+- **Speculative consciousness/phenomenology** framing unless it cashes out in an operational,
+  measurable claim.

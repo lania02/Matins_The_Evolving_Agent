@@ -2,10 +2,10 @@
 # See DESIGN.md sections 11-13.
 
 provider:
-  name: anthropic            # anthropic | openai | openai_compatible
-  model: claude-opus-4-8
-  base_url: null             # set for local / OpenAI-compatible endpoints (Ollama, vLLM, LM Studio)
-  api_key_env: MATINS_API_KEY
+  name: openai_compatible           # anthropic | openai | openai_compatible
+  model: gemini-2.5-flash-lite
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai  # Gemini OpenAI-compatible endpoint
+  api_key_env: GEMINI_API_KEY   # NAME of the env var (defined in .env), NOT the key itself
 
 generation:
   n_slots: 4
@@ -24,8 +24,8 @@ messaging:
   collect_delay_hours: 3
 
 memory_kernels:
-  - { name: fast, window_days: 7,  stride: 1, aggregator: llm_summarize_recent,  feeds: generation }
-  - { name: slow, window_days: 75, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation }
+  - { name: fast, window_days: 3,  stride: 1, aggregator: llm_summarize_recent,  feeds: generation }
+  - { name: slow, window_days: 30, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation }
 
 consolidation:
   cadence_days: 7
