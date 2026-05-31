@@ -63,6 +63,24 @@ def test_recent_events_returns_events_with_expected_keys() -> None:
     assert expected_keys.issubset(events[0].keys())
 
 
+def test_recent_events_uses_only_latest_feedback_per_idea() -> None:
+    # Append-only log: re-ranking an idea inserts a second feedback row. recent_events
+    # must NOT multiply that idea (which would skew fast memory + consolidation); it
+    # takes only the latest feedback per idea.
+    store = _make_store()
+    batch, idea_a, idea_b = _seed_batch_with_two_ideas(store)
+    store.insert_feedback(Feedback(idea_id=idea_a.idea_id, user_rank=1,
+                                   user_comment="first take", source="telegram"))
+    store.insert_feedback(Feedback(idea_id=idea_a.idea_id, user_rank=3,
+                                   user_comment="changed my mind", source="telegram"))
+
+    events = store.recent_events(window_days=3650, stride=1)
+    assert len(events) == 2                                   # one row per idea, not 3
+    a_event = next(e for e in events if e["idea_id"] == idea_a.idea_id)
+    assert a_event["user_rank"] == 3                          # latest wins
+    assert a_event["user_comment"] == "changed my mind"
+
+
 def test_skill_versioning_and_approval() -> None:
     store = _make_store()
     v1 = store.insert_skill_version("taste v1", parent_version=None, diff_summary="init")

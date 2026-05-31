@@ -232,7 +232,9 @@ class Store:
                       f.user_rank AS user_rank, f.user_comment AS user_comment
                FROM ideas i
                JOIN batches b ON i.batch_id = b.batch_id
-               LEFT JOIN feedback f ON f.idea_id = i.idea_id
+               LEFT JOIN feedback f ON f.rowid = (
+                   SELECT f2.rowid FROM feedback f2 WHERE f2.idea_id = i.idea_id
+                   ORDER BY f2.created_at DESC, f2.rowid DESC LIMIT 1)
                WHERE b.date >= ?
                ORDER BY b.date ASC, i.idx ASC""",
             (cutoff,),

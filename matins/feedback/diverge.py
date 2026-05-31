@@ -98,12 +98,18 @@ def reflect_on_batch(cfg, store, llm, batch) -> float | None:
 
             existing = store.find_hypothesis(text)
             if existing is not None:
-                existing.occurrence += 1
-                existing.confidence = min(1.0, existing.confidence + 0.2)
-                if idea_ids:
-                    merged = _merge_evidence(existing.evidence, idea_ids)
+                # Idempotent per batch: only count this as a fresh occurrence when the
+                # batch contributes evidence we haven't already recorded. Otherwise a
+                # re-`collect` (cron + manual) or a re-ranking of the same batch would
+                # inflate occurrence/confidence and falsely trip the consolidation
+                # threshold. `reflect_on_batch` runs on every collect, so this guard
+                # matters even without new feedback.
+                merged = _merge_evidence(existing.evidence, idea_ids)
+                if merged != existing.evidence:
+                    existing.occurrence += 1
+                    existing.confidence = min(1.0, existing.confidence + 0.2)
                     existing.evidence = merged
-                store.upsert_hypothesis(existing)
+                    store.upsert_hypothesis(existing)
             else:
                 store.upsert_hypothesis(
                     TasteHypothesis(
