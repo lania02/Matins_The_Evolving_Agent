@@ -18,7 +18,11 @@ import httpx
 
 from ..config import Config
 
-_TIMEOUT = 120
+# Short connect (fail fast if the endpoint is down) but a long read: the on-demand
+# deep dive stuffs up to ~40 retrieved sources into one prompt and asks for a long
+# structured briefing, which can take minutes on a shared endpoint. A 120s read
+# ceiling was tripping that synthesis ("The read operation timed out").
+_TIMEOUT = httpx.Timeout(300.0, connect=15.0)
 
 
 class OpenAICompatibleProvider:
