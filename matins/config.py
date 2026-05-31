@@ -94,6 +94,11 @@ class Config:
     retrieval: RetrievalCfg = field(default_factory=RetrievalCfg)
     deep_dive: DeepDiveCfg = field(default_factory=DeepDiveCfg)
     interest_seed_file: str = "prompts/interest_seed.md"
+    # Optional sandbox switch: redirect all MUTABLE state (db, favorites, deep-dive
+    # mirrors) under root/<state_dir> instead of root itself, while prompts/skills/
+    # interest_seed stay shared with the real project. Lets you test generation/dig
+    # against a throwaway DB without ever touching the production data. None = off.
+    state_dir: str | None = None
     # Runtime-resolved, not from YAML:
     root: Path = field(default_factory=lambda: Path("."))
 
@@ -121,14 +126,18 @@ class Config:
     def skills_dir(self) -> Path:
         return self.root / "skills"
 
+    def _state_root(self) -> Path:
+        """Root for mutable state; redirected to root/<state_dir> in sandbox mode."""
+        return (self.root / self.state_dir) if self.state_dir else self.root
+
     def db_path(self) -> Path:
-        return self.root / "data" / "matins.db"
+        return self._state_root() / "data" / "matins.db"
 
     def favorites_path(self) -> Path:
-        return self.root / "favorites.md"
+        return self._state_root() / "favorites.md"
 
     def deep_dives_dir(self) -> Path:
-        return self.root / "deep_dives"
+        return self._state_root() / "deep_dives"
 
     def deep_dive_web_key(self) -> str | None:
         return os.environ.get(self.deep_dive.web_api_key_env)
@@ -209,5 +218,6 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         retrieval=RetrievalCfg(**(data.get("retrieval") or {})),
         deep_dive=DeepDiveCfg(**(data.get("deep_dive") or {})),
         interest_seed_file=data.get("interest_seed_file", "prompts/interest_seed.md"),
+        state_dir=data.get("state_dir"),
         root=(p.parent if p.parent != Path("") else Path(".")),
     )

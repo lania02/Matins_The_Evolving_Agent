@@ -6,6 +6,10 @@ data/
 
 # Local config with secrets / chat ids
 config.yaml
+sandbox.config.yaml
+
+# Throwaway sandbox state (isolated db + outputs for testing generation/dig)
+sandbox/
 
 # Per-user local Claude Code settings (keep shared .claude/settings.json if added)
 .claude/settings.local.json

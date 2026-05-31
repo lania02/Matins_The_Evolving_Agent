@@ -1,0 +1,63 @@
+# Matins SANDBOX config (template). Copy to sandbox.config.yaml and edit.
+#
+# Purpose: test idea generation / dig / deep-dive against a THROWAWAY database
+# without ever touching your production data/matins.db.
+#
+# How it stays isolated:
+#   - state_dir below redirects ALL mutable state (db, favorites, deep-dive mirrors)
+#     under ./sandbox/, so the real data/matins.db is never read or written.
+#   - prompts/, skills/, prompts/interest_seed.md stay SHARED with the real project,
+#     so the sandbox always exercises your current prompts (incl. the anti-repetition
+#     guard) and uses your real taste skill as the cold-start seed.
+#   - messaging.channel is 'none', so the sandbox never calls Telegram and can never
+#     disturb the real bot's update offset.
+#
+# Run it (from the project root):
+#   python -m matins --config sandbox.config.yaml run --date sbx-1
+#   python -m matins --config sandbox.config.yaml run --date sbx-2   # tests dedup vs sbx-1
+#   python -m matins --config sandbox.config.yaml dig 1              # deep-dive idea #1
+#
+# Reset the sandbox any time: delete the ./sandbox/ folder. Nothing else is affected.
+
+state_dir: sandbox            # <-- the isolation switch; mutable state lives under ./sandbox/
+
+provider:                     # mirror your real config.yaml provider block
+  name: openai_compatible
+  model: meta/llama-3.3-70b-instruct
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key_env: KIMI_API_KEY
+
+generation:
+  n_slots: 4
+  temperature: 0.4
+  output_language: bilingual
+
+novelty:
+  search_provider: arxiv      # arxiv needs no API key
+  k: 5
+
+messaging:
+  channel: none               # sandbox never touches Telegram
+
+memory_kernels:
+  - { name: fast, window_days: 3,  stride: 1, aggregator: llm_summarize_recent,  feeds: generation }
+  - { name: slow, window_days: 30, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation }
+
+retrieval:
+  sources:                    # seed from your interests; feeds FRESH RETRIEVAL
+    - mechanism design evolutionary
+    - multivariate Hawkes process
+    - opinion dynamics phase transition
+    - spectral stability multi-agent
+    - computational autopoiesis artificial life
+    - self-improving language agents
+  dedup_against_days: 30
+
+deep_dive:
+  model: ""                   # "" = provider.model
+  web_search: tavily          # needs TAVILY_API_KEY in .env; falls back to arxiv-only if absent
+  web_api_key_env: TAVILY_API_KEY
+  k_per_query: 5
+  max_queries: 4
+
+interest_seed_file: prompts/interest_seed.md
