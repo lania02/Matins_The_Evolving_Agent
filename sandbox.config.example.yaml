@@ -52,6 +52,13 @@ retrieval:
     - computational autopoiesis artificial life
     - self-improving language agents
   dedup_against_days: 30
+  blend:                        # balanced source mix (scholarly-led), not a flat pile
+    openalex: 3
+    arxiv: 2
+    tavily: 2
+    hackernews: 1
+  max_items: 8
+  openalex_api_key_env: OPENALEX_API_KEY
 
 deep_dive:
   model: ""                   # "" = provider.model

@@ -68,6 +68,37 @@ def test_run_batch_full_pipeline():
     assert all(len(m) < 4096 for m in msgs)
 
 
+def test_interleave_balances_and_caps():
+    from matins.generate.pipeline import _interleave
+    a = [{"via": "arxiv"}, {"via": "arxiv"}]
+    b = [{"via": "web"}]
+    c = [{"via": "hn"}, {"via": "hn"}, {"via": "hn"}]
+    out = _interleave([a, b, c], cap=4)
+    assert len(out) == 4                                         # cap honored
+    assert [o["via"] for o in out] == ["arxiv", "web", "hn", "arxiv"]   # round-robin
+
+
+def test_collect_channel_dedup_quota_and_tag():
+    from matins.generate.pipeline import _collect_channel
+
+    class FakeP:
+        def __init__(self, per_query):
+            self.per_query = per_query
+
+        def search(self, q, *, k=5):
+            return self.per_query.get(q, [])
+
+    seen = {"http://dup"}                                        # already seen -> skipped
+    provider = FakeP({
+        "q1": [{"url": "http://dup"}, {"url": "http://a"}],      # dup skipped, takes 'a'
+        "q2": [{"url": "http://b"}],
+        "q3": [{"url": "http://c"}],
+    })
+    out = _collect_channel(provider, ["q1", "q2", "q3"], quota=2, seen=seen, label="arxiv")
+    assert [o["url"] for o in out] == ["http://a", "http://b"]  # one per query, quota stops at 2
+    assert all(o["via"] == "arxiv" for o in out)
+
+
 def test_run_batch_is_idempotent_per_date():
     cfg = _cfg()
     store = Store(":memory:")

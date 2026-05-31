@@ -70,10 +70,12 @@ def _format_retrieval(retrieval: list[dict]) -> str:
     if not retrieval:
         return "(no fresh retrieval configured)"
     lines = []
-    for r in retrieval[:8]:
-        title = r.get("title", "").strip()
-        url = r.get("url", "").strip()
-        lines.append(f"- {title} {url}".rstrip())
+    for r in retrieval[:12]:
+        via = (r.get("via") or "").strip()
+        title = (r.get("title") or "").strip()
+        url = (r.get("url") or "").strip()
+        tag = f"[{via}] " if via else ""
+        lines.append(f"- {tag}{title} {url}".rstrip())
     return "\n".join(lines)
 
 

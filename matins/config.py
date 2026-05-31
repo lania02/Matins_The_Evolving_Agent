@@ -66,6 +66,16 @@ class ConsolidationCfg:
 class RetrievalCfg:
     sources: list[str] = field(default_factory=list)
     dedup_against_days: int = 30
+    # Per-source quota for the daily generation feed: how many items each source may
+    # contribute, blended (interleaved) and then capped at max_items. The default mix
+    # is deliberately scholarly-heavy (arxiv+openalex = 5/8) with a small web/community
+    # spice (tavily+hackernews = 3/8) for timeliness and cross-domain breakout -- NOT a
+    # flat pile of everything. A source set to 0 (or whose key is missing) is skipped.
+    blend: dict[str, int] = field(default_factory=lambda: {
+        "openalex": 3, "arxiv": 2, "tavily": 2, "hackernews": 1,
+    })
+    max_items: int = 8                          # hard cap on the blended feed
+    openalex_api_key_env: str = "OPENALEX_API_KEY"
 
 
 @dataclass
@@ -142,6 +152,9 @@ class Config:
 
     def deep_dive_web_key(self) -> str | None:
         return os.environ.get(self.deep_dive.web_api_key_env)
+
+    def openalex_api_key(self) -> str | None:
+        return os.environ.get(self.retrieval.openalex_api_key_env)
 
     def dig_model(self) -> str:
         """Model for on-demand deep dives (falls back to the main provider model)."""

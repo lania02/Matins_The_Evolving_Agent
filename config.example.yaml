@@ -45,6 +45,18 @@ retrieval:
     - computational autopoiesis artificial life
     - self-improving language agents
   dedup_against_days: 30
+  # The daily feed BLENDS several sources, each capped by its quota, then interleaved
+  # and capped at max_items -- a deliberate mix, not a flat pile. Scholarly sources
+  # lead; web/community add a minority of timeliness/breakout signal. Set a source to
+  # 0 to drop it. openalex's key is optional (lifts the rate limit); tavily reuses the
+  # deep_dive TAVILY_API_KEY and is skipped if absent; arxiv + hackernews are keyless.
+  blend:
+    openalex: 3
+    arxiv: 2
+    tavily: 2
+    hackernews: 1
+  max_items: 8
+  openalex_api_key_env: OPENALEX_API_KEY
 
 deep_dive:                   # on-demand `dig #N` grounded briefings
   model: gemini-3.5-flash    # stronger model for synthesis; "" = use provider.model

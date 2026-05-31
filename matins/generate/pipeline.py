@@ -48,33 +48,84 @@ def _read_active_skill(cfg: Config, store: Store) -> tuple[str, int | None]:
     return "", None
 
 
-def _fetch_retrieval(cfg: Config, search: SearchProvider | None, store: Store,
-                     batch_id: str) -> list[dict]:
-    """Pull a few fresh items from configured sources, de-duped against recent batches.
+def _collect_channel(provider, queries: list[str], quota: int,
+                     seen: set[str], label: str) -> list[dict]:
+    """One fresh (non-duplicate) hit per query, for topic spread, up to `quota`.
 
-    Advisory context only; safe to return [] when no search provider or no sources.
+    `seen` is shared across channels (and seeded from recent batches) so the same
+    item never appears twice. Each kept item is tagged with its source `label`.
     """
-    if search is None or not cfg.retrieval.sources:
-        return []
-    seen = store.recent_result_ids(cfg.retrieval.dedup_against_days)
-    collected: list[dict] = []
-    fresh_ids: list[str] = []
-    for source in cfg.retrieval.sources:
+    bucket: list[dict] = []
+    for q in queries:
+        if len(bucket) >= quota:
+            break
         try:
-            results = search.search(source, k=cfg.novelty.k)
+            results = provider.search(q, k=3) or []
         except Exception:
             continue
-        for r in results:
-            rid = r.get("url") or r.get("title", "")
-            if rid and rid not in seen:
-                collected.append(r)
-                fresh_ids.append(rid)
-        if len(collected) >= 8:
+        for r in results:                         # take the first fresh hit for this query
+            rid = (r.get("url") or r.get("title") or "").strip()
+            if not rid or rid in seen:
+                continue
+            seen.add(rid)
+            bucket.append({**r, "via": label})
             break
-    if fresh_ids:
-        store.log_retrieval(batch_id, query="; ".join(cfg.retrieval.sources),
-                            source=cfg.novelty.search_provider, result_ids=fresh_ids)
-    return collected[:8]
+    return bucket
+
+
+def _interleave(buckets: list[list[dict]], cap: int) -> list[dict]:
+    """Round-robin merge channel buckets so the cap stays balanced, not front-loaded."""
+    out: list[dict] = []
+    depth = 0
+    while len(out) < cap and any(depth < len(b) for b in buckets):
+        for b in buckets:
+            if depth < len(b):
+                out.append(b[depth])
+                if len(out) >= cap:
+                    break
+        depth += 1
+    return out
+
+
+def _fetch_retrieval(cfg: Config, store: Store, batch_id: str) -> list[dict]:
+    """Blend a small, balanced set of fresh items across the configured sources.
+
+    Each source (cfg.retrieval.blend) contributes at most its quota; the channels are
+    interleaved and the whole feed is capped at cfg.retrieval.max_items, de-duped
+    against recent batches. A deliberate blend, not a pile: scholarly sources lead,
+    web/community add a minority of timeliness/breakout signal.
+
+    Advisory only: any source failure is swallowed; returns [] when nothing is
+    configured or available.
+    """
+    from ..providers.search_web import get_retrieval_searcher
+
+    sources = cfg.retrieval.sources
+    blend = cfg.retrieval.blend or {}
+    if not sources or not blend:
+        return []
+
+    seen = store.recent_result_ids(cfg.retrieval.dedup_against_days)
+    buckets: list[list[dict]] = []
+    for name, quota in blend.items():
+        if quota <= 0:
+            continue
+        provider = get_retrieval_searcher(name, cfg)
+        if provider is None:                      # missing key / unknown source -> skip
+            continue
+        bucket = _collect_channel(provider, sources, quota, seen, name)
+        if bucket:
+            buckets.append(bucket)
+
+    out = _interleave(buckets, cfg.retrieval.max_items)
+    if out:
+        store.log_retrieval(
+            batch_id,
+            query="; ".join(sources),
+            source="blend:" + ",".join(blend.keys()),
+            result_ids=[(s.get("url") or s.get("title") or "") for s in out],
+        )
+    return out
 
 
 def _generate_one(llm: LLMProvider, prompt: str, temperature: float,
@@ -156,6 +207,11 @@ def run_batch(
         cfg.retrieval.dedup_against_days, exclude_batch_id=batch_id
     )
 
+    # Fetch the blended fresh-literature feed ONCE; all slots share it (it is the
+    # day's "what's new" context, not a per-slot input). Skipped when no search
+    # provider is wired (search=None), which also keeps the offline tests network-free.
+    retrieval = _fetch_retrieval(cfg, store, batch_id) if search is not None else []
+
     slots = SLOTS[: cfg.generation.n_slots]
     ideas: list[Idea] = []
     for slot in slots:
@@ -163,7 +219,7 @@ def run_batch(
         context = {
             "skill": skill_text,
             "fast_memory": fast_memory,
-            "retrieval": _fetch_retrieval(cfg, search, store, batch_id),
+            "retrieval": retrieval,
             "interest_seed": interest_seed,
             "recent_ideas": recent_ideas,
         }

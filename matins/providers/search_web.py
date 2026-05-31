@@ -209,10 +209,104 @@ class TavilySearchProvider:
             return []
 
 
+def _openalex_abstract(inv: dict | None) -> str:
+    """Reconstruct an abstract from OpenAlex's inverted index ({word: [positions]})."""
+    if not inv:
+        return ""
+    pos: dict[int, str] = {}
+    for word, idxs in inv.items():
+        for i in idxs:
+            pos[i] = word
+    return " ".join(pos[i] for i in sorted(pos))
+
+
+class OpenAlexSearchProvider:
+    """Scholarly search via OpenAlex (open corpus, cross-domain, citation-aware).
+
+    Relevance-ranked full-text search; abstracts are reconstructed from the inverted
+    index. The API key (optional) just raises the rate limit. Best-effort: any error
+    returns [] so the daily loop never breaks on a search hiccup.
+    """
+
+    def __init__(self, api_key: str | None = None, mailto: str | None = None):
+        self.api_key = api_key
+        self.mailto = mailto
+
+    def search(self, query: str, *, k: int = 5) -> list[dict]:
+        try:
+            params: dict = {"search": query, "per_page": max(1, k)}
+            if self.api_key:
+                params["api_key"] = self.api_key
+            if self.mailto:
+                params["mailto"] = self.mailto
+            resp = httpx.get("https://api.openalex.org/works", params=params,
+                             timeout=60, follow_redirects=True)
+            if not (200 <= resp.status_code < 300):
+                return []
+            out: list[dict] = []
+            for w in (resp.json().get("results") or []):
+                title = _collapse(w.get("display_name") or "", limit=300)
+                url = (w.get("doi") or "").strip() or (w.get("id") or "").strip()
+                snippet = _collapse(_openalex_abstract(w.get("abstract_inverted_index")), limit=400)
+                if title:
+                    out.append({"title": title, "url": url, "snippet": snippet})
+            return out
+        except Exception:
+            return []
+
+
+class HackerNewsSearchProvider:
+    """Community-signal search via the Hacker News Algolia API (free, no key).
+
+    Surfaces what practitioners are currently discussing -- a timeliness / applied-angle
+    signal, not a scholarly one. Best-effort: any error returns [].
+    """
+
+    def search(self, query: str, *, k: int = 5) -> list[dict]:
+        try:
+            resp = httpx.get("https://hn.algolia.com/api/v1/search",
+                             params={"query": query, "tags": "story", "hitsPerPage": max(1, k)},
+                             timeout=60, follow_redirects=True)
+            if not (200 <= resp.status_code < 300):
+                return []
+            out: list[dict] = []
+            for h in (resp.json().get("hits") or []):
+                title = _collapse(h.get("title") or h.get("story_title") or "", limit=300)
+                url = (h.get("url") or "").strip()
+                if not url and h.get("objectID"):
+                    url = f"https://news.ycombinator.com/item?id={h['objectID']}"
+                if title:
+                    out.append({"title": title, "url": url, "snippet": ""})
+            return out
+        except Exception:
+            return []
+
+
 def get_web_searcher(cfg) -> SearchProvider | None:
     """Web searcher for the deep dive (Tavily), or None when unconfigured/keyless."""
     if cfg.deep_dive.web_search == "tavily":
         key = cfg.deep_dive_web_key()
         if key:
             return TavilySearchProvider(key)
+    return None
+
+
+def get_retrieval_searcher(name: str, cfg) -> SearchProvider | None:
+    """Resolve a named source for the daily generation feed, or None if unavailable.
+
+    'tavily' needs a key; the others are keyless (openalex's key is optional and only
+    lifts the rate limit). Unknown names return None and are simply skipped.
+    """
+    name = (name or "").lower()
+    if name == "arxiv":
+        return ArxivSearchProvider()
+    if name == "openalex":
+        return OpenAlexSearchProvider(api_key=cfg.openalex_api_key())
+    if name == "tavily":
+        key = cfg.deep_dive_web_key()
+        return TavilySearchProvider(key) if key else None
+    if name == "hackernews":
+        return HackerNewsSearchProvider()
+    if name == "web":
+        return WebSearchProvider()
     return None
