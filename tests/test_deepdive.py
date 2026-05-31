@@ -48,6 +48,16 @@ def test_gather_sources_dedup_and_tag() -> None:
     assert out[0]["via"] == "arxiv"
 
 
+def test_gather_sources_caps_and_balances() -> None:
+    arx = FakeSearch([{"title": f"A{i}", "url": f"http://a/{i}", "snippet": ""} for i in range(8)])
+    web = FakeSearch([{"title": f"W{i}", "url": f"http://w/{i}", "snippet": ""} for i in range(8)])
+    out = gather_sources([(arx, "arxiv"), (web, "web")], ["q1"], k=8, max_sources=10)
+    assert len(out) == 10                                  # hard cap honored
+    vias = [s["via"] for s in out]
+    assert vias[:4] == ["arxiv", "web", "arxiv", "web"]    # round-robin, not arxiv-only
+    assert vias.count("arxiv") == 5 and vias.count("web") == 5
+
+
 def test_propose_queries_parses_and_falls_back() -> None:
     idea = Idea(idea_id="i1", batch_id="b", slot="highfit", idx=1, title="Spectral Markets Model")
     qs = propose_queries(FakeLLM('["spectral radius markets", "market microstructure"]'),

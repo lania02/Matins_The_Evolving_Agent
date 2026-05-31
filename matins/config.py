@@ -75,6 +75,7 @@ class DeepDiveCfg:
     web_api_key_env: str = "TAVILY_API_KEY"
     k_per_query: int = 5
     max_queries: int = 4
+    max_sources: int = 10            # hard cap on sources fed into one briefing
 
 
 DEFAULT_KERNELS = [

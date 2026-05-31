@@ -59,5 +59,6 @@ deep_dive:
   web_api_key_env: TAVILY_API_KEY
   k_per_query: 5
   max_queries: 4
+  max_sources: 10            # hard cap on sources fed into one briefing
 
 interest_seed_file: prompts/interest_seed.md

@@ -50,7 +50,8 @@ deep_dive:                   # on-demand `dig #N` grounded briefings
   model: gemini-3.5-flash    # stronger model for synthesis; "" = use provider.model
   web_search: tavily         # tavily | none
   web_api_key_env: TAVILY_API_KEY
-  k_per_query: 5
-  max_queries: 4
+  k_per_query: 5             # results requested per query, per searcher
+  max_queries: 4             # how many search queries the model decomposes the idea into
+  max_sources: 10            # hard cap on sources fed into one briefing (balanced arxiv+web)
 
 interest_seed_file: prompts/interest_seed.md

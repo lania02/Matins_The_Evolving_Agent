@@ -53,11 +53,19 @@ def propose_queries(llm, idea: Idea, prompts_dir, max_queries: int) -> list[str]
     return queries[:max_queries]
 
 
-def gather_sources(searchers, queries, k: int) -> list[dict]:
-    """Run every query on every searcher; merge, de-dupe by URL, tag origin."""
-    out: list[dict] = []
+def gather_sources(searchers, queries, k: int, max_sources: int = 10) -> list[dict]:
+    """Run every query on every searcher; de-dupe by URL, tag origin, and return at
+    most `max_sources` items.
+
+    Sources are merged round-robin across searchers (arxiv[0], web[0], arxiv[1], ...)
+    so the cap keeps a balance of source types rather than letting the first searcher
+    fill all the slots. A briefing grounded in ~10 well-chosen sources beats one
+    drowning in 40 (and avoids overlong, timeout-prone synthesis prompts).
+    """
     seen: set[str] = set()
+    buckets: list[list[dict]] = []
     for sp, label in searchers:
+        bucket: list[dict] = []
         for q in queries:
             try:
                 results = sp.search(q, k=k) or []
@@ -69,12 +77,23 @@ def gather_sources(searchers, queries, k: int) -> list[dict]:
                 if not key or key in seen:
                     continue
                 seen.add(key)
-                out.append({
+                bucket.append({
                     "title": (r.get("title") or "").strip(),
                     "url": url,
                     "snippet": (r.get("snippet") or "").strip(),
                     "via": label,
                 })
+        buckets.append(bucket)
+
+    out: list[dict] = []
+    depth = 0
+    while len(out) < max_sources and any(depth < len(b) for b in buckets):
+        for b in buckets:
+            if depth < len(b):
+                out.append(b[depth])
+                if len(out) >= max_sources:
+                    break
+        depth += 1
     return out
 
 
@@ -110,7 +129,10 @@ def run_deep_dive(cfg: Config, store: Store, idea: Idea) -> dict:
         searchers.append((web, "web"))
 
     queries = propose_queries(llm, idea, prompts_dir, cfg.deep_dive.max_queries)
-    sources = gather_sources(searchers, queries, cfg.deep_dive.k_per_query)
+    sources = gather_sources(
+        searchers, queries, cfg.deep_dive.k_per_query,
+        max_sources=cfg.deep_dive.max_sources,
+    )
     brief = synthesize_brief(llm, idea, sources, prompts_dir, cfg.generation.output_language)
 
     store.save_deep_dive(idea.idea_id, brief, json.dumps(sources, ensure_ascii=False))
