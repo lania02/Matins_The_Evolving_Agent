@@ -60,6 +60,11 @@ class ConsolidationCfg:
     cadence_days: int = 7
     hypothesis_occurrence_threshold: int = 3
     require_human_approval: bool = True
+    # Phase 5 self-evolution switch. OFF by default: when on, `matins consolidate` also
+    # tries to propose a NEW taste dimension and adopts it ONLY if it passes a held-out
+    # backtest; the dimension is parked for human approval (Assisted mode). Data-gated,
+    # so turn it on once enough feedback log has accumulated.
+    evolve_dimensions: bool = False
 
 
 @dataclass

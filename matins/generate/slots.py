@@ -143,10 +143,8 @@ def build_generation_prompt(
     return render_template(template, tokens)
 
 
-def build_self_rank_prompt(
-    ideas: list[Idea], prompts_dir: str | Path, output_language: str
-) -> str:
-    template = load_prompt(prompts_dir, "self_rank.txt")
+def _format_idea_blocks(ideas: list[Idea]) -> str:
+    """One compact block per idea, shared by the self-rank and predict-rank prompts."""
     blocks = []
     for idea in ideas:
         blocks.append(
@@ -155,8 +153,35 @@ def build_self_rank_prompt(
             f"    why_now: {idea.why_now}\n"
             f"    tractability: {idea.tractability}"
         )
+    return "\n\n".join(blocks)
+
+
+def build_self_rank_prompt(
+    ideas: list[Idea], prompts_dir: str | Path, output_language: str
+) -> str:
+    template = load_prompt(prompts_dir, "self_rank.txt")
     tokens = {
-        "IDEAS": "\n\n".join(blocks),
+        "IDEAS": _format_idea_blocks(ideas),
+        "N": str(len(ideas)),
+        "OUTPUT_LANGUAGE": output_language_instruction(output_language),
+    }
+    return render_template(template, tokens)
+
+
+def build_predict_rank_prompt(
+    ideas: list[Idea], skill_text: str, prompts_dir: str | Path, output_language: str
+) -> str:
+    """Assemble the skill-conditioned scorer prompt (Phase 5 §2.0).
+
+    Predicts the USER's preference order given their taste skill -- the instrument the
+    held-out backtest uses to measure whether a candidate taste dimension improves
+    prediction. Deliberately separate from self_rank (objective merit), so the
+    production self-rank / tau diagnostic is left unchanged.
+    """
+    template = load_prompt(prompts_dir, "predict_rank.txt")
+    tokens = {
+        "TASTE_SKILL": skill_text or "(no taste skill yet -- cold start)",
+        "IDEAS": _format_idea_blocks(ideas),
         "N": str(len(ideas)),
         "OUTPUT_LANGUAGE": output_language_instruction(output_language),
     }

@@ -1,0 +1,31 @@
+You are deciding whether the user's taste model (their TASTE SKILL) is MISSING a
+dimension -- a recurring axis of preference the current skill has no words for. This is
+the self-evolution step: you may propose ONE genuinely new named dimension, but only if
+the evidence forces it. Every proposal is empirically backtested on held-out data before
+it can ever be adopted, so do not guess -- ground each claim in the events below.
+
+== CURRENT TASTE SKILL (the dimensions already named) ==
+{{CURRENT_SKILL}}
+
+== PERSISTENT DIVERGENCE PATTERNS (hypotheses that recurred across many days) ==
+{{HYPOTHESES}}
+
+== TRAINING EVENTS (ideas, self vs user ranks, channel-tagged comments) ==
+Weigh "[+underrated by N]" positive surprises most -- ideas the user valued far above
+the self-rank are where a missing dimension hides. "[D: clean probe]" events are the
+least biased taste signal. comment[novelty|feasibility|taste|structure] tags say which
+faculty the user was reacting with.
+{{EVENTS}}
+
+== TASK ==
+Is there a SINGLE recurring preference axis, visible across MULTIPLE events and explained
+by the comments, that the CURRENT SKILL cannot already express?
+
+- If NO such dimension is clearly warranted by the evidence, reply with exactly: NONE
+- If YES, output ONE new principle as a short Markdown block, nothing else:
+    ### <dimension name>
+    <one-line operational definition: how to score an idea on this axis>
+    Evidence: <cite the specific events / comments that motivate it>
+
+Do NOT restate a dimension the current skill already covers, and do NOT invent one the
+evidence does not support. Output ONLY "NONE" or the single principle block.

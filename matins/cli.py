@@ -160,6 +160,13 @@ def cmd_consolidate(args) -> int:
     messaging = get_messaging_provider(cfg)
     result = run_consolidation(cfg, store, llm, messaging, approve_version=args.approve)
     print(result.get("message", "consolidation step complete."))
+
+    # Phase 5: when enabled, also try to evolve a NEW taste dimension (propose -> held-out
+    # backtest -> park for approval). Skipped while approving an existing proposal.
+    if args.approve is None and getattr(cfg.consolidation, "evolve_dimensions", False):
+        from .memory.evolve import evolve_dimension
+        er = evolve_dimension(cfg, store, llm, messaging)
+        print(er.get("message", "evolution step complete."))
     return 0
 
 
