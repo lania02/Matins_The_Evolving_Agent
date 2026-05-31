@@ -21,6 +21,14 @@ Produce exactly ONE idea, as a single JSON object. It must be concrete and actio
 == ALREADY PROPOSED (ideas surfaced in recent days -- avoid repeating these) ==
 {{RECENT_IDEAS}}
 
+== WORTH REVISITING (directions the user liked before but we have drifted away from) ==
+{{ARCHIVE}}
+
+You MAY pick the dimension you stretch toward from "worth revisiting" above: re-open one
+of those dormant, previously-liked directions from a fresh angle. This is optional and
+must still obey the distinctness constraint below -- revisit the direction, do not reprint
+the old idea.
+
 HARD CONSTRAINT: your idea must be genuinely distinct from every entry listed above.
 Do not restate, rename, or lightly re-skin any of them. If your first instinct overlaps
 with one, change its core mechanism, target system, or mathematical object until it is

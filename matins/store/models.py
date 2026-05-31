@@ -46,6 +46,7 @@ class Idea:
     prior_art: str = ""
     tractability: str = ""
     fit_to_program: str = ""
+    behavior: str = ""                 # 2-4 word "domain . method" tag; behavior coord for the archive
     random_genes: str = ""
     self_rank: int | None = None
     self_rationale: str = ""
@@ -57,6 +58,7 @@ class Feedback:
     idea_id: str
     user_rank: int | None = None
     user_comment: str = ""
+    comment_kind: str = ""             # taste|novelty|feasibility|structure (routes the signal)
     source: str = "telegram"          # telegram | cli | card
     created_at: str = ""
 

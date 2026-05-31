@@ -11,8 +11,29 @@ from __future__ import annotations
 from ..generate.slots import load_prompt, render_template
 
 
+def _underrated_by(self_rank, user_rank) -> int | None:
+    """How much the user out-ranked the system's self-rank (positive surprise).
+
+    rank 1 = best, so `self_rank - user_rank > 0` means the user valued the idea
+    MORE than the system predicted -- the residual that reveals a taste dimension
+    the system is missing (algo-update.md #2). Returns the gap, or None if it is
+    not a clear positive surprise (gap < 2) or a rank is absent.
+    """
+    try:
+        gap = int(self_rank) - int(user_rank)
+    except (TypeError, ValueError):
+        return None
+    return gap if gap >= 2 else None
+
+
 def format_events(events: list[dict]) -> str:
-    """Render the event dicts as one compact line each, skipping None fields."""
+    """Render the event dicts as one compact line each, skipping None fields.
+
+    Two learning signals are surfaced inline so both memory tiers attend to them
+    (algo-update.md #1, #2): the random slot D is tagged as a clean, exploit-free
+    taste probe, and ideas the user out-ranked the system on are tagged as positive
+    surprises (the residual that points at a missing taste dimension).
+    """
     lines: list[str] = []
     for e in events:
         parts: list[str] = []
@@ -22,6 +43,8 @@ def format_events(events: list[dict]) -> str:
         slot = e.get("slot")
         if slot is not None:
             parts.append(str(slot))
+            if str(slot) == "random":
+                parts.append("[D: clean probe]")
         idx = e.get("idx")
         if idx is not None:
             parts.append("#" + str(idx))
@@ -34,9 +57,14 @@ def format_events(events: list[dict]) -> str:
         user_rank = e.get("user_rank")
         if user_rank is not None:
             parts.append("user_rank=" + str(user_rank))
+        gap = _underrated_by(self_rank, user_rank)
+        if gap is not None:
+            parts.append(f"[+underrated by {gap}]")
         user_comment = e.get("user_comment")
         if user_comment is not None:
-            parts.append("comment=" + str(user_comment))
+            kind = (e.get("comment_kind") or "").strip()
+            label = f"comment[{kind}]=" if kind else "comment="
+            parts.append(label + str(user_comment))
         lines.append(" | ".join(parts))
     return "\n".join(lines)
 

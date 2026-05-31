@@ -89,8 +89,48 @@ def parse_ranking(
     return ranks, comments, problems
 
 
-def _ingest_text(store, batch, text: str, source: str) -> int:
-    """Parse `text` against the batch's ideas and insert one Feedback per hit."""
+COMMENT_KINDS = ("taste", "novelty", "feasibility", "structure")
+
+
+def classify_comment(llm, comment: str) -> str:
+    """Classify a feedback comment into ONE routing channel (algo-update.md #3).
+
+    Different kinds of comment update different parts of the system: 'already done'
+    is novelty evidence, 'boring topic' is taste, 'can't build it' is feasibility,
+    'sloppy framing' is structure. Routing them apart eases the credit-assignment
+    ambiguity of a single lumped comment field.
+
+    Advisory: empty comment -> "" (no channel); any failure or unrecognized reply
+    defaults to 'taste' (the broadest channel) so a flaky call never drops signal.
+    """
+    text = (comment or "").strip()
+    if not text:
+        return ""
+    prompt = (
+        "Classify this one-line reaction to a research idea into exactly ONE channel:\n"
+        "- taste: about the topic / how interesting or relevant it is\n"
+        "- novelty: it has already been done, prior art, not original\n"
+        "- feasibility: it cannot be built / done, too hard, a resource problem\n"
+        "- structure: its framing, rigor, or how it is argued / built\n\n"
+        f"Reaction: {text}\n\n"
+        "Answer with ONE word: taste, novelty, feasibility, or structure."
+    )
+    try:
+        raw = (llm.generate(prompt, temperature=0.0) or "").strip().lower()
+    except Exception:
+        return "taste"
+    for k in COMMENT_KINDS:
+        if k in raw:
+            return k
+    return "taste"
+
+
+def _ingest_text(store, batch, text: str, source: str, *, classify=None) -> int:
+    """Parse `text` against the batch's ideas and insert one Feedback per hit.
+
+    `classify`, if given, is a callable comment->kind used to tag each non-empty
+    comment with a routing channel. Left None (offline / tests) -> kind stays "".
+    """
     ideas = store.ideas_for_batch(batch.batch_id)
     ranks, comments, _ = parse_ranking(text, len(ideas))
     count = 0
@@ -98,11 +138,13 @@ def _ingest_text(store, batch, text: str, source: str) -> int:
         rank = ranks.get(idea.idx)
         comment = comments.get(idea.idx, "")
         if rank is not None or comment:
+            kind = classify(comment) if (classify and comment) else ""
             store.insert_feedback(
                 Feedback(
                     idea_id=idea.idea_id,
                     user_rank=rank,
                     user_comment=comment,
+                    comment_kind=kind,
                     source=source,
                 )
             )
@@ -110,17 +152,17 @@ def _ingest_text(store, batch, text: str, source: str) -> int:
     return count
 
 
-def ingest_replies(store, batch, replies, source: str = "telegram") -> int:
+def ingest_replies(store, batch, replies, source: str = "telegram", *, classify=None) -> int:
     """Ingest a list of messaging Reply dicts as feedback for `batch`."""
     if not replies:
         return 0
     joined = "\n".join(r["text"] for r in replies)
-    return _ingest_text(store, batch, joined, source)
+    return _ingest_text(store, batch, joined, source, classify=classify)
 
 
-def ingest_cli_feedback(store, batch, text: str, source: str = "cli") -> int:
+def ingest_cli_feedback(store, batch, text: str, source: str = "cli", *, classify=None) -> int:
     """Ingest a single free-text blob (typed at the CLI) as feedback."""
-    return _ingest_text(store, batch, text, source)
+    return _ingest_text(store, batch, text, source, classify=classify)
 
 
 def parse_must_try(text: str, n_ideas: int) -> list[int]:

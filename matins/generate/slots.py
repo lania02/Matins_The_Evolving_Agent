@@ -55,7 +55,9 @@ def _idea_schema_instruction() -> str:
     return (
         "Return ONLY a single JSON object with these string keys: " + keys + ". "
         "Use \"\" for math_structure if the idea has no real mathematical content "
-        "(an empty value is itself a signal). Do not include prior_art."
+        "(an empty value is itself a signal). Make \"behavior\" a terse 2-4 word "
+        "\"domain . method\" tag (e.g. \"causal inference . optimal transport\") used "
+        "only to index idea diversity, not prose. Do not include prior_art."
     )
 
 
@@ -76,6 +78,19 @@ def _format_retrieval(retrieval: list[dict]) -> str:
         url = (r.get("url") or "").strip()
         tag = f"[{via}] " if via else ""
         lines.append(f"- {tag}{title} {url}".rstrip())
+    return "\n".join(lines)
+
+
+def _format_archive(archive: list[dict], *, limit: int = 6) -> str:
+    """Render dormant, well-liked 'elite' directions for the revival block (slot B)."""
+    if not archive:
+        return "(no dormant directions to revisit yet)"
+    lines = []
+    for a in archive[:limit]:
+        title = (a.get("title") or "").strip()
+        beh = (a.get("behavior") or "").strip()
+        tag = f"[{beh}] " if beh else ""
+        lines.append(f"- {tag}{title}".rstrip())
     return "\n".join(lines)
 
 
@@ -102,7 +117,8 @@ def build_generation_prompt(
     """Assemble the generation prompt for one slot.
 
     `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed,
-    recent_ideas (list of {date, slot, title} dicts for the anti-repetition block).
+    recent_ideas (list of {date, slot, title} dicts for the anti-repetition block),
+    archive (list of dormant well-liked elites for the slot-B revival block).
     `genes` is the sampled (domain, method, constraint) triple for slot=random.
     """
     template = load_prompt(prompts_dir, SLOT_PROMPT_FILES[slot])
@@ -119,6 +135,7 @@ def build_generation_prompt(
         "FAST_MEMORY": context.get("fast_memory") or "(no recent feedback yet)",
         "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
         "RECENT_IDEAS": _format_recent_ideas(context.get("recent_ideas") or []),
+        "ARCHIVE": _format_archive(context.get("archive") or []),
         "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
         "IDEA_SCHEMA": _idea_schema_instruction(),
         "GENES": genes_str,

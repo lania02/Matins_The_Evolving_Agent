@@ -67,3 +67,18 @@ def test_build_generation_prompt_substitutes_skill_and_strips_markers() -> None:
     for token in ("{{TASTE_SKILL}}", "{{FAST_MEMORY}}", "{{RETRIEVAL}}",
                   "{{INTEREST_SEED}}", "{{IDEA_SCHEMA}}", "{{OUTPUT_LANGUAGE}}"):
         assert token not in prompt
+
+
+def test_adjacent_slot_injects_revival_archive() -> None:
+    # The QD revival archive (algo-update.md #5) is fed only to the adjacent slot.
+    context = {
+        "skill": "s", "fast_memory": "f", "interest_seed": "i", "retrieval": [],
+        "archive": [{"title": "RESURFACE-ME", "behavior": "optimal transport"}],
+    }
+    prompt = build_generation_prompt(
+        slot="adjacent", context=context, prompts_dir=PROMPTS_DIR,
+        output_language="bilingual", genes=None,
+    )
+    assert "RESURFACE-ME" in prompt          # dormant elite injected
+    assert "optimal transport" in prompt     # with its behavior tag
+    assert "{{ARCHIVE}}" not in prompt       # token fully substituted

@@ -17,10 +17,23 @@ content that should replace the current skill.
 Principles:
 - Only encode preferences with PERSISTENCE: a pattern visible across multiple batches /
   multiple days, ideally reinforced by user comments. Discard one-off noise.
+- Trust events tagged "[D: clean probe]" (the random slot) as the least-biased taste
+  evidence: they were not steered toward what the skill already asserts, so a recurring
+  reaction there is worth more than the same signal from the conditioned slots.
+- Treat events tagged "[+underrated by N]" (positive surprises -- the user valued an
+  idea more than the self-rank predicted) as the richest signal for GROWTH: they reveal
+  a dimension the current skill cannot yet express. Your aim is to NAME that dimension,
+  not to make future self-rankings merely agree with the user. Do not let predictability
+  become the objective.
 - Favor STRUCTURAL preferences ("rewards an explicit isomorphism", "penalizes ideas with
   no concrete first step", "likes contrarian framings") over transient TOPIC fashions
   ("phase transitions this month"), since topics drift while structure is more stable.
   Keep durable topic interests, but mark anything that looks like a passing fashion.
+- Comments are channel-tagged as comment[taste|novelty|feasibility|structure]; route
+  each to the right update and do NOT lump them: novelty comments ("already done")
+  change how you judge originality / prior art, feasibility comments ("can't build it")
+  change tractability judgements, taste comments change topic/interest preferences, and
+  structure comments change the structural principles.
 - Preserve still-valid principles from the current skill; revise or remove ones the
   recent evidence contradicts. Be conservative -- when in doubt, keep the prior wording.
 - Write it as clear, human-readable guidance an idea generator can condition on: a short

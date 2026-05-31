@@ -15,6 +15,7 @@ from ..config import Config
 from ..providers.base import LLMProvider, SearchProvider
 from ..store.db import Store, new_id, now_iso, today_iso
 from ..store.models import SLOTS, Batch, Idea
+from .explore import adaptive_temperature
 from .schema import IDEA_JSON_SCHEMA, IdeaParseError, parse_idea
 from .slots import (
     build_generation_prompt,
@@ -179,6 +180,14 @@ def run_batch(
     interest_seed = _read_interest_seed(cfg)
     genes_pool = load_genes(prompts_dir)
 
+    # Adaptive exploration (algo-update.md #4): scale the explore temperature to how
+    # volatile recent self-vs-user agreement has been -- explore more when uncertain
+    # or drifting, exploit when stable. Cold start (no prior taus) -> base unchanged.
+    explore_temp = adaptive_temperature(
+        [b.self_user_tau for b in store.list_batches(limit=8)],
+        cfg.generation.temperature,
+    )
+
     # Fast memory is a *read* of the log (DESIGN.md section 5). Imported lazily so a
     # cold-start run with an empty log never requires the memory module to do work.
     from ..memory.kernels import compute_memory
@@ -195,7 +204,7 @@ def run_batch(
         batch_id=batch_id,
         date=date,
         skill_version=skill_version,
-        temperature=cfg.generation.temperature,
+        temperature=explore_temp,
         provider=cfg.provider.name,
         model=cfg.provider.model,
         created_at=now_iso(),
@@ -206,6 +215,11 @@ def run_batch(
     recent_ideas = store.recent_idea_titles(
         cfg.retrieval.dedup_against_days, exclude_batch_id=batch_id
     )
+
+    # QD revival (algo-update.md #5): a few well-liked but dormant directions, offered
+    # ONLY to the adjacent-stretch slot so the system can recover good ground it has
+    # drifted away from, instead of collapsing onto current favourites.
+    revival = store.archive_revival()
 
     # Fetch the blended fresh-literature feed ONCE; all slots share it (it is the
     # day's "what's new" context, not a per-slot input). Skipped when no search
@@ -222,12 +236,13 @@ def run_batch(
             "retrieval": retrieval,
             "interest_seed": interest_seed,
             "recent_ideas": recent_ideas,
+            "archive": revival,
         }
         prompt = build_generation_prompt(
             slot, context, prompts_dir, cfg.generation.output_language, genes
         )
         try:
-            parsed = _generate_one(llm, prompt, slot_temperature(cfg.generation.temperature, slot))
+            parsed = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
         except IdeaParseError:
             # Resilience (DESIGN.md philosophy): a single slot that won't yield JSON
             # must not sink the whole morning. Skip it and keep what parsed.
@@ -247,6 +262,7 @@ def run_batch(
                 prior_art=parsed.get("prior_art", "[unchecked]"),
                 tractability=parsed["tractability"],
                 fit_to_program=parsed["fit_to_program"],
+                behavior=parsed.get("behavior", ""),
                 random_genes=json.dumps(genes, ensure_ascii=False) if genes else "",
                 created_at=now_iso(),
             )

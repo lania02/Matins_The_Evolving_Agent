@@ -47,6 +47,46 @@ def test_kendall_tau_perfect_disagreement() -> None:
     assert kendall_tau([1, 2, 3, 4], [4, 3, 2, 1]) == -1.0
 
 
+def test_classify_comment_routes_and_defaults() -> None:
+    from matins.feedback.capture import classify_comment
+
+    class FakeLLM:
+        def __init__(self, reply):
+            self.reply = reply
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            return self.reply
+
+    assert classify_comment(FakeLLM("novelty"), "already done by Smith 2024") == "novelty"
+    assert classify_comment(FakeLLM("FEASIBILITY"), "can't build it") == "feasibility"
+    assert classify_comment(FakeLLM("garbage word"), "x") == "taste"   # unrecognized -> default
+    assert classify_comment(FakeLLM("novelty"), "") == ""              # empty comment -> no channel
+
+    class BoomLLM:
+        def generate(self, *a, **k):
+            raise RuntimeError("endpoint down")
+
+    assert classify_comment(BoomLLM(), "x") == "taste"                 # failure -> default, never raises
+
+
+def test_ingest_with_classify_persists_channel() -> None:
+    from matins.feedback.capture import ingest_cli_feedback
+    from matins.store.db import Store, new_id, now_iso, today_iso
+    from matins.store.models import Batch, Idea
+
+    store = Store(":memory:")
+    batch = Batch(batch_id=new_id(), date=today_iso(), provider="x", model="m", created_at=now_iso())
+    store.insert_batch(batch)
+    for i in (1, 2):
+        store.insert_idea(Idea(idea_id=new_id(), batch_id=batch.batch_id, slot="highfit",
+                               idx=i, title=f"T{i}", mechanism="m"))
+    ingest_cli_feedback(store, batch, "1>2\n#1 already done elsewhere",
+                        classify=lambda c: "novelty")
+    by_idx = {i.idx: i for i in store.ideas_for_batch(batch.batch_id)}
+    assert store.feedback_for_idea(by_idx[1].idea_id).comment_kind == "novelty"  # tagged
+    assert store.feedback_for_idea(by_idx[2].idea_id).comment_kind == ""         # no comment -> no channel
+
+
 def test_reflect_on_batch_is_idempotent_per_batch() -> None:
     # reflect_on_batch runs on EVERY collect. Re-collecting (cron + manual) or
     # re-ranking the same batch must not inflate a taste hypothesis's occurrence /

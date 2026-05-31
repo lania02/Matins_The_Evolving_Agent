@@ -118,3 +118,44 @@ def test_retrieval_log_and_recent_result_ids() -> None:
     recent = store.recent_result_ids(days=30)
     assert "arxiv:1234" in recent
     assert "arxiv:5678" in recent
+
+
+def _add_idea(store, *, date, behavior, user_rank, title, slot="highfit"):
+    """Insert a one-idea batch with a behavior tag and (optional) user rank."""
+    b = Batch(batch_id=new_id(), date=date, provider="x", model="m", created_at=now_iso())
+    store.insert_batch(b)
+    idea = Idea(idea_id=new_id(), batch_id=b.batch_id, slot=slot, idx=1,
+                title=title, mechanism="m", behavior=behavior)
+    store.insert_idea(idea)
+    if user_rank is not None:
+        store.insert_feedback(Feedback(idea_id=idea.idea_id, user_rank=user_rank, source="cli"))
+    return idea
+
+
+def test_archive_revival_picks_dormant_liked_elites() -> None:
+    # QD revival: surface directions the user LIKED but that have gone DORMANT.
+    store = _make_store()
+    old = "2020-01-01"
+    _add_idea(store, date=old, behavior="optimal transport", user_rank=1, title="liked+dormant")
+    _add_idea(store, date=today_iso(), behavior="spectral graph", user_rank=1, title="liked+active")
+    _add_idea(store, date=old, behavior="random matrix", user_rank=4, title="disliked+dormant")
+    _add_idea(store, date=old, behavior="", user_rank=1, title="no-behavior")
+
+    out = store.archive_revival(dormant_days=21, limit=5, max_rank=2)
+    titles = {c["title"] for c in out}
+    assert "liked+dormant" in titles          # liked + dormant -> revive
+    assert "liked+active" not in titles       # seen recently -> not dormant
+    assert "disliked+dormant" not in titles   # poorly ranked -> not an elite
+    assert "no-behavior" not in titles        # no behavior coord -> not in archive
+    assert {c["behavior"] for c in out} == {"optimal transport"}
+
+
+def test_archive_revival_one_elite_per_behavior_cell() -> None:
+    # Two dormant ideas share a behavior cell -> one entry, the better-ranked exemplar.
+    store = _make_store()
+    _add_idea(store, date="2020-01-01", behavior="causal inference", user_rank=2, title="okay")
+    _add_idea(store, date="2020-01-02", behavior="causal inference", user_rank=1, title="best")
+
+    out = store.archive_revival(dormant_days=21, limit=5, max_rank=2)
+    assert len(out) == 1                      # collapsed to one cell
+    assert out[0]["title"] == "best"          # elite = best-ranked exemplar

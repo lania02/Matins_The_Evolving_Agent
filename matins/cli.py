@@ -92,7 +92,7 @@ def cmd_run(args) -> int:
 
 # ---- matins collect ------------------------------------------------------
 def cmd_collect(args) -> int:
-    from .feedback.capture import ingest_must_try, ingest_replies
+    from .feedback.capture import classify_comment, ingest_must_try, ingest_replies
     from .feedback.diverge import reflect_on_batch
 
     cfg = _bootstrap(args)
@@ -107,13 +107,14 @@ def cmd_collect(args) -> int:
         print("no batch yet; run `matins run` first.")
         return 1
 
+    llm = get_llm_provider(cfg)
     offset = store.get_offset(cfg.messaging.channel)
     replies = messaging.fetch_replies(offset)
-    n = ingest_replies(store, batch, replies, source=cfg.messaging.channel)
+    n = ingest_replies(store, batch, replies, source=cfg.messaging.channel,
+                       classify=lambda c: classify_comment(llm, c))
     if replies:
         store.set_offset(cfg.messaging.channel, replies[-1]["update_id"])
 
-    llm = get_llm_provider(cfg)
     tau = reflect_on_batch(cfg, store, llm, batch)
     print(f"ingested {n} feedback row(s); self-vs-user tau = {tau}")
 
@@ -164,7 +165,7 @@ def cmd_consolidate(args) -> int:
 
 # ---- matins feedback (offline fallback) ----------------------------------
 def cmd_feedback(args) -> int:
-    from .feedback.capture import ingest_cli_feedback
+    from .feedback.capture import classify_comment, ingest_cli_feedback
     from .feedback.diverge import reflect_on_batch
 
     cfg = _bootstrap(args)
@@ -178,8 +179,9 @@ def cmd_feedback(args) -> int:
     if not text:
         print("paste ranking (e.g. '3>1>4>2' then optional '#n comment' lines), then Ctrl-D:")
         text = sys.stdin.read()
-    n = ingest_cli_feedback(store, batch, text, source="cli")
     llm = get_llm_provider(cfg)
+    n = ingest_cli_feedback(store, batch, text, source="cli",
+                            classify=lambda c: classify_comment(llm, c))
     tau = reflect_on_batch(cfg, store, llm, batch)
     print(f"ingested {n} feedback row(s); self-vs-user tau = {tau}")
     return 0

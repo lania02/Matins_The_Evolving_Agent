@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   prior_art       TEXT,
   tractability    TEXT,
   fit_to_program  TEXT,
+  behavior        TEXT DEFAULT '',       -- 2-4 word "domain . method" tag; behavior coord for the archive
   random_genes    TEXT,
   self_rank       INTEGER,
   self_rationale  TEXT,
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS feedback (
   idea_id         TEXT REFERENCES ideas(idea_id),
   user_rank       INTEGER,
   user_comment    TEXT,
+  comment_kind    TEXT DEFAULT '',       -- taste|novelty|feasibility|structure (routes the signal)
   source          TEXT,
   created_at      TEXT
 );
@@ -124,7 +126,17 @@ class Store:
 
     def init_schema(self) -> None:
         self.conn.executescript(SCHEMA)
+        # Idempotent column migrations: CREATE TABLE IF NOT EXISTS never alters an
+        # existing table, so columns added after a DB was first created are patched in
+        # here. Safe on a fresh DB (the column is already in SCHEMA) and on an old one.
+        self._ensure_column("feedback", "comment_kind", "TEXT DEFAULT ''")
+        self._ensure_column("ideas", "behavior", "TEXT DEFAULT ''")
         self.conn.commit()
+
+    def _ensure_column(self, table: str, column: str, decl: str) -> None:
+        cols = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if column not in cols:
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     def close(self) -> None:
         self.conn.close()
@@ -177,11 +189,11 @@ class Store:
         self.conn.execute(
             """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, mechanism,
                why_now, math_structure, prior_art, tractability, fit_to_program,
-               random_genes, self_rank, self_rationale, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               behavior, random_genes, self_rank, self_rationale, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title,
              idea.mechanism, idea.why_now, idea.math_structure, idea.prior_art,
-             idea.tractability, idea.fit_to_program, idea.random_genes,
+             idea.tractability, idea.fit_to_program, idea.behavior, idea.random_genes,
              idea.self_rank, idea.self_rationale, idea.created_at or now_iso()),
         )
         self.conn.commit()
@@ -201,9 +213,10 @@ class Store:
     # ---- feedback --------------------------------------------------------
     def insert_feedback(self, fb: Feedback) -> None:
         self.conn.execute(
-            """INSERT INTO feedback (idea_id, user_rank, user_comment, source, created_at)
-               VALUES (?,?,?,?,?)""",
-            (fb.idea_id, fb.user_rank, fb.user_comment, fb.source, fb.created_at or now_iso()),
+            """INSERT INTO feedback (idea_id, user_rank, user_comment, comment_kind, source, created_at)
+               VALUES (?,?,?,?,?,?)""",
+            (fb.idea_id, fb.user_rank, fb.user_comment, fb.comment_kind, fb.source,
+             fb.created_at or now_iso()),
         )
         self.conn.commit()
 
@@ -236,7 +249,8 @@ class Store:
                       i.title AS title, i.mechanism AS mechanism,
                       i.math_structure AS math_structure, i.tractability AS tractability,
                       i.self_rank AS self_rank, i.self_rationale AS self_rationale,
-                      f.user_rank AS user_rank, f.user_comment AS user_comment
+                      f.user_rank AS user_rank, f.user_comment AS user_comment,
+                      f.comment_kind AS comment_kind
                FROM ideas i
                JOIN batches b ON i.batch_id = b.batch_id
                LEFT JOIN feedback f ON f.rowid = (
@@ -275,6 +289,51 @@ class Store:
             (cutoff, exclude_batch_id, exclude_batch_id),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def archive_revival(self, *, dormant_days: int = 21, limit: int = 3,
+                        max_rank: int = 2) -> list[dict]:
+        """Well-liked but dormant 'elite' ideas, one per behavior cell (QD revival).
+
+        For each non-empty behavior cell, take the idea the user ranked best (latest
+        feedback's user_rank). Keep cells that are (a) genuinely liked -- best
+        user_rank <= max_rank -- and (b) dormant: no idea with that behavior has
+        appeared within `dormant_days`. Returns up to `limit` elites, most-recently-
+        seen first: diverse directions worth revisiting when taste swings back
+        (algo-update.md #5), NOT today's favourites. A derived read, no archive table.
+        """
+        rows = self.conn.execute(
+            """SELECT i.title AS title, i.behavior AS behavior, b.date AS date,
+                      (SELECT f.user_rank FROM feedback f WHERE f.idea_id = i.idea_id
+                       ORDER BY f.created_at DESC, f.rowid DESC LIMIT 1) AS user_rank
+               FROM ideas i JOIN batches b ON i.batch_id = b.batch_id
+               WHERE i.behavior IS NOT NULL AND TRIM(i.behavior) != ''"""
+        ).fetchall()
+
+        cutoff = _cutoff_date(dormant_days)
+        cells: dict[str, dict] = {}
+        for r in rows:
+            beh = (r["behavior"] or "").strip()
+            if not beh:
+                continue
+            date = r["date"] or ""
+            rank = r["user_rank"]
+            c = cells.get(beh)
+            if c is None:
+                cells[beh] = {"behavior": beh, "title": r["title"],
+                              "best_rank": rank, "last_seen": date}
+                continue
+            c["last_seen"] = max(c["last_seen"], date)
+            if rank is not None and (c["best_rank"] is None or rank < c["best_rank"]):
+                c["best_rank"] = rank          # elite = best-ranked exemplar of the cell
+                c["title"] = r["title"]
+
+        revival = [
+            c for c in cells.values()
+            if c["best_rank"] is not None and c["best_rank"] <= max_rank
+            and c["last_seen"] < cutoff
+        ]
+        revival.sort(key=lambda c: c["last_seen"], reverse=True)
+        return revival[:limit]
 
     # ---- retrieval log ---------------------------------------------------
     def log_retrieval(self, batch_id: str, query: str, source: str, result_ids: list[str]) -> None:

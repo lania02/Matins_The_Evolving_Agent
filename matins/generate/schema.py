@@ -18,6 +18,7 @@ IDEA_FIELDS = [
     "math_structure",   # empty if none -- itself a signal
     "tractability",
     "fit_to_program",
+    "behavior",         # 2-4 word "domain . method" tag; behavior coord for the diversity archive
     "prior_art",
 ]
 
