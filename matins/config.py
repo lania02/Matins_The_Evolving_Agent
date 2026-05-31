@@ -150,6 +150,9 @@ class Config:
     def deep_dives_dir(self) -> Path:
         return self._state_root() / "deep_dives"
 
+    def view_path(self) -> Path:
+        return self._state_root() / "view.md"
+
     def deep_dive_web_key(self) -> str | None:
         return os.environ.get(self.deep_dive.web_api_key_env)
 

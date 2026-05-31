@@ -222,6 +222,24 @@ def cmd_favorites(args) -> int:
     return 0
 
 
+# ---- matins view ---------------------------------------------------------
+def cmd_view(args) -> int:
+    from .digest.render import render_overview
+
+    cfg = _bootstrap(args)
+    store = _open_store(cfg)
+    batches = store.list_batches(limit=args.limit)
+    if not batches:
+        print("no batches yet; run `matins run` first.")
+        return 1
+    md = render_overview(store, batches, db_path=str(cfg.db_path()))
+    out_path = Path(args.out) if args.out else cfg.view_path()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(md, encoding="utf-8")
+    print(f"wrote DB view ({len(batches)} batch(es)) -> {out_path}")
+    return 0
+
+
 # ---- matins dig ----------------------------------------------------------
 def cmd_dig(args) -> int:
     from .generate.deepdive import run_deep_dive, write_brief_md
@@ -281,6 +299,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     pfav = sub.add_parser("favorites", help="list curated 'must try' ideas (refreshes favorites.md)")
     pfav.set_defaults(func=cmd_favorites)
+
+    pview = sub.add_parser("view", help="render the DB to a markdown overview (-> state_dir/view.md)")
+    pview.add_argument("--limit", type=int, default=None, help="only the N most recent batches")
+    pview.add_argument("--out", default=None, help="output path (default: <state_dir>/view.md)")
+    pview.set_defaults(func=cmd_view)
 
     pd = sub.add_parser("dig", help="deep-dive briefing for one idea (arxiv + web, cited)")
     pd.add_argument("n", type=int, help="idea number to deep-dive")

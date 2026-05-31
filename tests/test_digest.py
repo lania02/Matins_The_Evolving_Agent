@@ -1,8 +1,9 @@
 """Offline tests for digest rendering (matins.digest.render)."""
 from __future__ import annotations
 
-from matins.digest.render import render_digest
-from matins.store.models import SLOTS, Batch, Idea
+from matins.digest.render import render_digest, render_overview
+from matins.store.db import Store
+from matins.store.models import SLOTS, Batch, Feedback, Idea
 
 
 def _make_batch_and_ideas() -> tuple[Batch, list[Idea]]:
@@ -48,3 +49,22 @@ def test_render_digest_shape_and_limits() -> None:
 
     # The batch date is shown in the header.
     assert batch.date in header
+
+
+def test_render_overview_pulls_from_store() -> None:
+    batch, ideas = _make_batch_and_ideas()
+    store = Store(":memory:")
+    store.insert_batch(batch)
+    for idea in ideas:
+        store.insert_idea(idea)
+    store.insert_feedback(Feedback(idea_id="idea-0", user_rank=2, user_comment="like it", source="cli"))
+    store.log_retrieval(batch.batch_id, query="q", source="blend:arxiv",
+                        result_ids=["http://x/1"])
+
+    md = render_overview(store, [batch], db_path="mem.db")
+    assert "database view" in md
+    assert batch.date in md
+    assert "Idea 1" in md                      # idea title rendered
+    assert "Fresh retrieval fed in" in md      # blend log surfaced
+    assert "http://x/1" in md
+    assert "like it" in md                     # user feedback surfaced

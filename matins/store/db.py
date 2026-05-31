@@ -153,6 +153,13 @@ class Store:
         ).fetchone()
         return Batch(**dict(row)) if row else None
 
+    def list_batches(self, limit: int | None = None) -> list[Batch]:
+        """All batches, newest first (for read-only views/exports)."""
+        sql = "SELECT * FROM batches ORDER BY created_at DESC"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        return [Batch(**dict(r)) for r in self.conn.execute(sql).fetchall()]
+
     def set_batch_digest_msg_id(self, batch_id: str, digest_msg_id: str) -> None:
         self.conn.execute(
             "UPDATE batches SET digest_msg_id=? WHERE batch_id=?", (digest_msg_id, batch_id)
@@ -277,6 +284,22 @@ class Store:
             (batch_id, query, source, json.dumps(result_ids), now_iso()),
         )
         self.conn.commit()
+
+    def retrieval_for_batch(self, batch_id: str) -> list[dict]:
+        """Retrieval-log rows for a batch (source, query, result_ids), oldest first."""
+        rows = self.conn.execute(
+            "SELECT source, query, result_ids, created_at FROM retrieval_log "
+            "WHERE batch_id=? ORDER BY created_at ASC", (batch_id,)
+        ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["result_ids"] = json.loads(d.get("result_ids") or "[]")
+            except (ValueError, TypeError):
+                d["result_ids"] = []
+            out.append(d)
+        return out
 
     def recent_result_ids(self, days: int) -> set[str]:
         """Result ids seen recently, for de-duplicating future batches."""
