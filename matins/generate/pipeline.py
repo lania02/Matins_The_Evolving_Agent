@@ -150,6 +150,12 @@ def run_batch(
         created_at=now_iso(),
     )
 
+    # Anti-repetition guard: show the model what it already proposed recently so it
+    # does not re-surface near-duplicates when the fresh inputs barely move day to day.
+    recent_ideas = store.recent_idea_titles(
+        cfg.retrieval.dedup_against_days, exclude_batch_id=batch_id
+    )
+
     slots = SLOTS[: cfg.generation.n_slots]
     ideas: list[Idea] = []
     for slot in slots:
@@ -159,6 +165,7 @@ def run_batch(
             "fast_memory": fast_memory,
             "retrieval": _fetch_retrieval(cfg, search, store, batch_id),
             "interest_seed": interest_seed,
+            "recent_ideas": recent_ideas,
         }
         prompt = build_generation_prompt(
             slot, context, prompts_dir, cfg.generation.output_language, genes

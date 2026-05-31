@@ -23,6 +23,13 @@ Use this to locate a domain that is genuinely DISTANT from these interests.
 == FRESH RETRIEVAL (recent literature / feeds that may seed timeliness) ==
 {{RETRIEVAL}}
 
+== ALREADY PROPOSED (ideas surfaced in recent days -- avoid repeating these) ==
+{{RECENT_IDEAS}}
+
+HARD CONSTRAINT: your contrarian idea must also be distinct from every entry listed
+above -- do not recycle a previous day's contrarian move. If it overlaps, defy a
+different preference or jump to a different distant domain until it is clearly new.
+
 Guidance for this slot:
 - Pick ONE concrete thing to defy: a stated structural preference, a favored method, a
   comfortable assumption, or the whole topic area -- and commit to it fully.

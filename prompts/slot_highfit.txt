@@ -19,6 +19,14 @@ to act on: a real mechanism, a real reason it is timely, and an honest first ste
 == FRESH RETRIEVAL (recent literature / feeds that may seed timeliness) ==
 {{RETRIEVAL}}
 
+== ALREADY PROPOSED (ideas surfaced in recent days -- avoid repeating these) ==
+{{RECENT_IDEAS}}
+
+HARD CONSTRAINT: your idea must be genuinely distinct from every entry listed above.
+Do not restate, rename, or lightly re-skin any of them. If your first instinct overlaps
+with one, change its core mechanism, target system, or mathematical object until it is
+clearly new.
+
 Guidance for this slot:
 - Lean hard into the taste skill and fast memory. If a structural preference is stated
   (e.g. "rewards an explicit isomorphism", "penalizes ideas with no first concrete

@@ -33,7 +33,17 @@ consolidation:
   require_human_approval: true
 
 retrieval:
-  sources: []                # arXiv categories / venues / feeds; seed from your interests
+  # Each entry is a SHORT keyword query (2-3 words), NOT an arXiv category code.
+  # The arXiv adapter ANDs the words together (all:w1 AND all:w2 ...), so a bare
+  # category like "cs.MA" would be full-text-searched and return nothing useful.
+  # Seed these from your interest_seed research areas; they feed FRESH RETRIEVAL.
+  sources:
+    - mechanism design evolutionary
+    - multivariate Hawkes process
+    - opinion dynamics phase transition
+    - spectral stability multi-agent
+    - computational autopoiesis artificial life
+    - self-improving language agents
   dedup_against_days: 30
 
 deep_dive:                   # on-demand `dig #N` grounded briefings

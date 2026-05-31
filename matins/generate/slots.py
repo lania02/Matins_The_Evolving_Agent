@@ -77,6 +77,19 @@ def _format_retrieval(retrieval: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_recent_ideas(recent: list[dict], *, limit: int = 40) -> str:
+    """Render recently-proposed ideas (one per line) for the anti-repetition block."""
+    if not recent:
+        return "(none yet -- this is an early run)"
+    lines = []
+    for r in recent[:limit]:
+        date = (r.get("date") or "").strip()
+        slot = (r.get("slot") or "").strip()
+        title = (r.get("title") or "").strip()
+        lines.append(f"- [{date} {slot}] {title}".rstrip())
+    return "\n".join(lines)
+
+
 def build_generation_prompt(
     slot: str,
     context: dict,
@@ -86,7 +99,8 @@ def build_generation_prompt(
 ) -> str:
     """Assemble the generation prompt for one slot.
 
-    `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed.
+    `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed,
+    recent_ideas (list of {date, slot, title} dicts for the anti-repetition block).
     `genes` is the sampled (domain, method, constraint) triple for slot=random.
     """
     template = load_prompt(prompts_dir, SLOT_PROMPT_FILES[slot])
@@ -102,6 +116,7 @@ def build_generation_prompt(
         "TASTE_SKILL": context.get("skill") or "(no taste skill yet -- cold start)",
         "FAST_MEMORY": context.get("fast_memory") or "(no recent feedback yet)",
         "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
+        "RECENT_IDEAS": _format_recent_ideas(context.get("recent_ideas") or []),
         "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
         "IDEA_SCHEMA": _idea_schema_instruction(),
         "GENES": genes_str,

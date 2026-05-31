@@ -247,6 +247,26 @@ class Store:
         keep = set(seen[::stride])
         return [dict(r) for r in rows if r["batch_id"] in keep]
 
+    def recent_idea_titles(
+        self, days: int, *, exclude_batch_id: str | None = None
+    ) -> list[dict]:
+        """Titles (with date + slot) of ideas generated in the last `days` days.
+
+        Fed verbatim into the generation prompt so the model can avoid re-proposing
+        an idea it already surfaced recently -- the dedup guard against repetition
+        when the fresh inputs barely move day to day. Newest first; the in-flight
+        batch is excluded so today's run never sees its own ideas.
+        """
+        cutoff = _cutoff_date(days)
+        rows = self.conn.execute(
+            """SELECT b.date AS date, i.slot AS slot, i.title AS title
+               FROM ideas i JOIN batches b ON i.batch_id = b.batch_id
+               WHERE b.date >= ? AND (? IS NULL OR i.batch_id != ?)
+               ORDER BY b.date DESC, i.idx ASC""",
+            (cutoff, exclude_batch_id, exclude_batch_id),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # ---- retrieval log ---------------------------------------------------
     def log_retrieval(self, batch_id: str, query: str, source: str, result_ids: list[str]) -> None:
         self.conn.execute(
