@@ -20,6 +20,9 @@ favorites.md
 # On-demand deep-dive briefings (derived; contain your research ideas)
 deep_dives/
 
+# DB visualization (derived from the DB; contains your research ideas)
+view.md
+
 # Python
 __pycache__/
 *.py[cod]
