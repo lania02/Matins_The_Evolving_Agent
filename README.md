@@ -25,6 +25,10 @@ weekly matins consolidate propose a taste-skill update → you approve → versi
 - **Four slots** per day (DESIGN §6): A high-fit (exploit), B adjacent-stretch,
   C orthogonal (contrarian), D random-mutation. Variation is built in so the
   system never collapses onto what you already like.
+- **Anti-repetition guard.** Recently proposed idea titles are fed back into the
+  prompts with a hard "must be distinct" constraint, so when the day-to-day inputs
+  barely move the system still won't re-surface near-duplicates of last week's ideas
+  (window = `retrieval.dedup_against_days`).
 - **The log is the asset.** The two memory tiers (fast / slow) are *computed* from
   the log by convolving temporal kernels (DESIGN §5), never separately maintained.
 - **Human in the loop on learning, not just generation.** A skill edit requires
@@ -68,15 +72,30 @@ matins collect             # a few hours later: ingest your reply
 matins consolidate         # weekly: propose a taste-skill update
 matins consolidate --approve 3   # accept proposed skill version 3
 matins feedback "3>1>4>2"  # offline fallback when not using Telegram
+matins dig 3               # on-demand deep dive: a grounded, cited briefing for idea #3
+matins favorites           # list ideas you flagged "must try" (mirrored to favorites.md)
 ```
 
-**Reply format** (DESIGN §9.4) — rank best→worst by idea number, optional comments:
+`matins run` is **idempotent per date** — re-running on the same day returns the
+stored batch verbatim (no regeneration, no new fetch). Only a new date triggers a
+fresh batch.
+
+**Reply format** (DESIGN §9.4) — rank best→worst by idea number, optional comments.
+Two inline commands are recognized in a reply and acted on during `matins collect`:
 
 ```
 3>1>4>2
 #3 explicit isomorphism, tractable first step
 #1 already done by <author> 2024
+must try #3                # copy idea #3 into your favorites library
+dig #1                     # request a deep-dive briefing for idea #1
 ```
+
+> **Note on `dig` via Telegram reply:** the reliable path is the CLI `matins dig N`
+> (add `--send` to also push the brief to your channel). The "dig #N" *reply* path
+> depends on Telegram's single-consumption update offset, which is shared between a
+> scheduled `collect` and a manual one — a reply consumed by one run is invisible to
+> the other. Prefer the CLI when you want a deep dive to definitely happen.
 
 ## Scheduling (no daemon)
 
@@ -91,6 +110,26 @@ All commands are idempotent and meant to be triggered externally.
 
 **Windows Task Scheduler:** schedule the same three commands.
 
+## Testing sandbox
+
+To experiment with generation / `dig` / deep dives **without touching your real
+log**, run against a throwaway database. Set `state_dir` in a separate config and
+all *mutable* state (db, favorites, deep-dive mirrors) is redirected under that
+folder, while `prompts/`, `skills/`, and your interest seed stay shared:
+
+```bash
+cp sandbox.config.example.yaml sandbox.config.yaml   # then set provider to match config.yaml
+matins --config sandbox.config.yaml run --date sbx-1
+matins --config sandbox.config.yaml run --date sbx-2   # exercises the anti-repetition guard vs sbx-1
+matins --config sandbox.config.yaml dig 1
+```
+
+The example ships with `state_dir: sandbox` and `messaging.channel: none`, so the
+sandbox writes only to `./sandbox/` and never calls Telegram or disturbs the real
+update offset. Reset any time by deleting `./sandbox/`. (`sandbox/` and
+`sandbox.config.yaml` are gitignored.) `python -m matins ...` works as an alias for
+the `matins` command when running an in-tree checkout.
+
 ## Layout
 
 ```
@@ -99,15 +138,18 @@ matins/
   store/      db.py models.py        append-only SQLite log + derived queries
   providers/  base.py anthropic.py openai.py openai_compatible.py search_web.py
               messaging/ base.py telegram.py whatsapp_*.py
-  generate/   pipeline.py slots.py schema.py novelty.py
+  generate/   pipeline.py slots.py schema.py novelty.py deepdive.py
   memory/     kernels.py consolidate.py
   feedback/   capture.py diverge.py
   digest/     render.py
-  cli.py
+  cli.py  __main__.py
 prompts/      slot_*.txt self_rank.txt summarize_recent.txt propose_skill_diff.txt
-              genes.yaml interest_seed.md
+              deepdive_queries.txt deepdive_brief.txt genes.yaml interest_seed.md
 skills/       taste.md     human-readable mirror of the active skill version
 data/         matins.db    (gitignored)
+deep_dives/   <slug>.md    deep-dive briefings (gitignored)
+favorites.md  curated "must try" ideas (gitignored)
+sandbox.config.example.yaml   template for an isolated testing sandbox
 tests/
 ```
 
