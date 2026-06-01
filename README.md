@@ -25,15 +25,25 @@ weekly matins consolidate propose a taste-skill update → you approve → versi
 - **Four slots** per day (DESIGN §6): A high-fit (exploit), B adjacent-stretch,
   C orthogonal (contrarian), D random-mutation. Variation is built in so the
   system never collapses onto what you already like.
-- **Anti-repetition guard.** Recently proposed idea titles are fed back into the
-  prompts with a hard "must be distinct" constraint, so when the day-to-day inputs
-  barely move the system still won't re-surface near-duplicates of last week's ideas
-  (window = `retrieval.dedup_against_days`).
+- **Anti-repetition guard.** Recently proposed idea titles — *and the ideas already
+  generated earlier in the same batch* — are fed back into the prompts with a hard
+  "must be distinct" constraint, so the slots never re-surface near-duplicates of last
+  week's ideas nor collapse onto each other (the adjacent slot can't restate high-fit).
+  Each slot also retries (resampling the random slot's genes) so you reliably get all
+  four ideas, not three.
 - **The log is the asset.** The two memory tiers (fast / slow) are *computed* from
   the log by convolving temporal kernels (DESIGN §5), never separately maintained.
 - **Human in the loop on learning, not just generation.** A skill edit requires
   your approval and persistence across observations — a tired morning never
   rewrites your taste.
+- **Adaptive learning layer** (see [`algo-upgrade-plan.md`](algo-upgrade-plan.md)).
+  Residuals are first-class (the random slot is treated as a clean, exploit-free taste
+  probe; ideas you rank far above the system are surfaced as "positive surprises"),
+  comments are routed by kind (taste / novelty / feasibility / structure), the explore
+  temperature adapts to how volatile your recent agreement has been, a quality-diversity
+  archive can revive dormant-but-liked directions, and an optional, human-approved
+  **self-evolution** step proposes brand-new taste dimensions — each gated by a held-out
+  backtest before it can be adopted (`consolidation.evolve_dimensions`, off by default).
 
 ---
 
@@ -61,8 +71,19 @@ Edit `config.yaml` (see [`config.example.yaml`](config.example.yaml) and DESIGN 
   `export MATINS_TELEGRAM_TOKEN=...` and run `matins init-telegram` to discover
   your `chat_id`. Set `channel: none` to use the CLI only.
 - **Interests** — fill in [`prompts/interest_seed.md`](prompts/interest_seed.md)
-  and `retrieval.sources` so day-one ideas are actually about your field. The
-  repo ships this as a template; **it starts empty.**
+  (your standing interests, always fed) and `retrieval.sources` (keyword queries
+  for the daily fresh-literature feed) so ideas are actually about your field.
+- **Fresh-literature feed** — each morning the generator blends a small, balanced
+  set of fresh items across sources, tagged by origin in the prompt:
+  - `openalex` (scholarly, cross-domain, citation-aware) and `arxiv` (fresh
+    preprints) — the scholarly backbone;
+  - `tavily` (web / why-now, reuses `TAVILY_API_KEY`) and `hackernews` (community
+    signal) — a minority of timeliness / breakout.
+
+  The mix is set by `retrieval.blend` (per-source quotas), interleaved and capped at
+  `retrieval.max_items` — a deliberate blend, not a flat pile. Set a source to `0` to
+  drop it; `openalex`'s key (`OPENALEX_API_KEY`) is optional (lifts the rate limit),
+  `arxiv`/`hackernews` are keyless, `tavily` is skipped without its key.
 
 ## Daily use
 
@@ -138,14 +159,16 @@ matins/
   store/      db.py models.py        append-only SQLite log + derived queries
   providers/  base.py anthropic.py openai.py openai_compatible.py search_web.py
               messaging/ base.py telegram.py whatsapp_*.py
-  generate/   pipeline.py slots.py schema.py novelty.py deepdive.py
-  memory/     kernels.py consolidate.py
+  generate/   pipeline.py slots.py schema.py novelty.py deepdive.py explore.py
+  memory/     kernels.py consolidate.py backtest.py evolve.py
   feedback/   capture.py diverge.py
   digest/     render.py
   cli.py  __main__.py
-prompts/      slot_*.txt self_rank.txt summarize_recent.txt propose_skill_diff.txt
-              deepdive_queries.txt deepdive_brief.txt genes.yaml interest_seed.md
+prompts/      slot_*.txt self_rank.txt predict_rank.txt summarize_recent.txt
+              propose_skill_diff.txt propose_dimension.txt deepdive_*.txt
+              genes.yaml interest_seed.md
 skills/       taste.md     human-readable mirror of the active skill version
+algo-upgrade-plan.md        the adaptive / self-evolution upgrade plan (Phases 1-5)
 data/         matins.db    (gitignored)
 deep_dives/   <slug>.md    deep-dive briefings (gitignored)
 favorites.md  curated "must try" ideas (gitignored)
