@@ -32,6 +32,12 @@ _REPAIR_INSTRUCTION = (
     "math_structure, tractability, fit_to_program.\n\nPrevious reply:\n"
 )
 
+# How many times to (re)try a slot before giving up on it. The random slot resamples its
+# genes each attempt -- a single awkward gene combo is the usual reason that pure-
+# perturbation slot fails to yield JSON, and dropping it leaves <n_slots ideas that
+# over-fit the batch to the user's existing work.
+_SLOT_ATTEMPTS = 3
+
 
 def _read_interest_seed(cfg: Config) -> str:
     path = cfg.interest_seed_path()
@@ -228,45 +234,57 @@ def run_batch(
 
     slots = SLOTS[: cfg.generation.n_slots]
     ideas: list[Idea] = []
+    siblings: list[dict] = []          # ideas already produced THIS batch (within-batch distinctness)
     for slot in slots:
-        genes = sample_genes(genes_pool) if slot == "random" else None
-        context = {
-            "skill": skill_text,
-            "fast_memory": fast_memory,
-            "retrieval": retrieval,
-            "interest_seed": interest_seed,
-            "recent_ideas": recent_ideas,
-            "archive": revival,
-        }
-        prompt = build_generation_prompt(
-            slot, context, prompts_dir, cfg.generation.output_language, genes
-        )
-        try:
-            parsed = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
-        except IdeaParseError:
-            # Resilience (DESIGN.md philosophy): a single slot that won't yield JSON
-            # must not sink the whole morning. Skip it and keep what parsed.
-            print(f"[warning] slot '{slot}' returned no valid JSON after retries; skipping it.",
-                  file=sys.stderr)
-            continue
-        ideas.append(
-            Idea(
-                idea_id=new_id(),
-                batch_id=batch_id,
-                slot=slot,
-                idx=len(ideas) + 1,
-                title=parsed["title"],
-                mechanism=parsed["mechanism"],
-                why_now=parsed["why_now"],
-                math_structure=parsed["math_structure"],
-                prior_art=parsed.get("prior_art", "[unchecked]"),
-                tractability=parsed["tractability"],
-                fit_to_program=parsed["fit_to_program"],
-                behavior=parsed.get("behavior", ""),
-                random_genes=json.dumps(genes, ensure_ascii=False) if genes else "",
-                created_at=now_iso(),
+        # Per-slot resilience: try a few times before skipping, resampling the random
+        # slot's genes each attempt. And show each slot the siblings already produced
+        # today so it must differ -- this is what stops the adjacent slot from collapsing
+        # into a near-duplicate of high-fit (every conditioned slot's prompt already
+        # carries a hard "distinct from everything above" constraint).
+        parsed = None
+        used_genes = None
+        for _ in range(_SLOT_ATTEMPTS):
+            used_genes = sample_genes(genes_pool) if slot == "random" else None
+            context = {
+                "skill": skill_text,
+                "fast_memory": fast_memory,
+                "retrieval": retrieval,
+                "interest_seed": interest_seed,
+                "recent_ideas": recent_ideas + siblings,
+                "archive": revival,
+            }
+            prompt = build_generation_prompt(
+                slot, context, prompts_dir, cfg.generation.output_language, used_genes
             )
+            try:
+                parsed = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
+                break
+            except IdeaParseError:
+                parsed = None
+        if parsed is None:
+            # Resilience (DESIGN.md philosophy): a slot that still won't yield JSON must
+            # not sink the whole morning. Skip it and keep what parsed.
+            print(f"[warning] slot '{slot}' returned no valid JSON after {_SLOT_ATTEMPTS} "
+                  "attempts; skipping it.", file=sys.stderr)
+            continue
+        idea = Idea(
+            idea_id=new_id(),
+            batch_id=batch_id,
+            slot=slot,
+            idx=len(ideas) + 1,
+            title=parsed["title"],
+            mechanism=parsed["mechanism"],
+            why_now=parsed["why_now"],
+            math_structure=parsed["math_structure"],
+            prior_art=parsed.get("prior_art", "[unchecked]"),
+            tractability=parsed["tractability"],
+            fit_to_program=parsed["fit_to_program"],
+            behavior=parsed.get("behavior", ""),
+            random_genes=json.dumps(used_genes, ensure_ascii=False) if used_genes else "",
+            created_at=now_iso(),
         )
+        ideas.append(idea)
+        siblings.append({"date": date, "slot": slot, "title": idea.title})
 
     if not ideas:
         raise RuntimeError(

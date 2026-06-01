@@ -109,3 +109,53 @@ def test_run_batch_is_idempotent_per_date():
 
     assert b1.batch_id == b2.batch_id
     assert len(ideas2) == 4
+
+
+_VALID = ('{"title": "T", "mechanism": "m", "why_now": "w", "math_structure": "", '
+          '"tractability": "t", "fit_to_program": "f"}')
+_RANKS = ('[{"idx":1,"rank":1,"rationale":"r"},{"idx":2,"rank":2,"rationale":"r"},'
+          '{"idx":3,"rank":3,"rationale":"r"},{"idx":4,"rank":4,"rationale":"r"}]')
+
+
+def test_random_slot_recovers_via_retry():
+    # The pure-perturbation slot fails its first attempt (gen + both repairs) but succeeds
+    # on a retry -> all 4 slots present, instead of an over-fit 3-idea batch.
+    class FlakyRandomLLM:
+        def __init__(self):
+            self.random_gens = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "definitely not json" in prompt:          # repairs of the failed random gen
+                return "definitely not json"
+            if "RANDOM-MUTATION" in prompt:              # the random slot's generation prompt
+                self.random_gens += 1
+                return "definitely not json" if self.random_gens < 2 else _VALID
+            if "single JSON object" in prompt:           # other slots' generation
+                return _VALID
+            return _RANKS                                # self-rank
+
+    _batch, ideas = run_batch(_cfg(), Store(":memory:"), FlakyRandomLLM(), None, date="2026-02-10")
+    assert [i.slot for i in ideas] == SLOTS              # random recovered via retry
+    assert len(ideas) == 4
+
+
+def test_siblings_injected_for_within_batch_distinctness():
+    # Each slot is shown the ideas already produced THIS batch, so adjacent cannot collapse
+    # into a near-duplicate of high-fit (the slot prompts enforce "distinct from above").
+    class RecordingLLM:
+        def __init__(self):
+            self.prompts = []
+            self.n = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "single JSON object" in prompt or "RANDOM-MUTATION" in prompt:
+                self.prompts.append(prompt)
+                self.n += 1
+                return (f'{{"title": "TITLE{self.n}", "mechanism": "m", "why_now": "w", '
+                        '"math_structure": "", "tractability": "t", "fit_to_program": "f"}')
+            return _RANKS
+
+    llm = RecordingLLM()
+    run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-02-11")
+    adjacent_prompt = next(p for p in llm.prompts if "ADJACENT-STRETCH" in p)
+    assert "TITLE1" in adjacent_prompt                   # the high-fit sibling is shown to adjacent
