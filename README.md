@@ -31,6 +31,17 @@ weekly matins consolidate propose a taste-skill update → you approve → versi
   week's ideas nor collapse onto each other (the adjacent slot can't restate high-fit).
   Each slot also retries (resampling the random slot's genes) so you reliably get all
   four ideas, not three.
+- **Anti-red-ocean gate (optional).** A contrarian "jump to a distant domain" tends to land
+  on that domain's most *famous* topic — a saturated red ocean (e.g. GNNs for protein folding)
+  that inspires no one. When enabled, a gated slot's candidate is grounded in **real
+  literature density** (OpenAlex work-count, binned into a calibrated band) plus its closest
+  existing works, and a judge regenerates it only if the area is *both* saturated *and* the
+  idea is an undifferentiated textbook pairing — a genuinely novel angle inside a busy field
+  still passes. **Which slots to gate is yours to choose and depends on your research
+  direction** (`novelty.saturation_gate_slots`, default `[orthogonal]`): the orthogonal slot
+  is the one prone to this, while gating high-fit (which *should* exploit your
+  possibly-crowded core) or the random probe (deliberately unbiased) usually does more harm
+  than good. An empty list turns it off; it is inactive offline (no search provider).
 - **The log is the asset.** The two memory tiers (fast / slow) are *computed* from
   the log by convolving temporal kernels (DESIGN §5), never separately maintained.
 - **Human in the loop on learning, not just generation.** A skill edit requires
@@ -159,14 +170,14 @@ matins/
   store/      db.py models.py        append-only SQLite log + derived queries
   providers/  base.py anthropic.py openai.py openai_compatible.py search_web.py
               messaging/ base.py telegram.py whatsapp_*.py
-  generate/   pipeline.py slots.py schema.py novelty.py deepdive.py explore.py
+  generate/   pipeline.py slots.py schema.py novelty.py saturation.py deepdive.py explore.py
   memory/     kernels.py consolidate.py backtest.py evolve.py
   feedback/   capture.py diverge.py
   digest/     render.py
   cli.py  __main__.py
 prompts/      slot_*.txt self_rank.txt predict_rank.txt summarize_recent.txt
-              propose_skill_diff.txt propose_dimension.txt deepdive_*.txt
-              genes.yaml interest_seed.md
+              propose_skill_diff.txt propose_dimension.txt saturation_judge.txt
+              deepdive_*.txt genes.yaml interest_seed.md
 skills/       taste.md     human-readable mirror of the active skill version
 algo-upgrade-plan.md        the adaptive / self-evolution upgrade plan (Phases 1-5)
 data/         matins.db    (gitignored)

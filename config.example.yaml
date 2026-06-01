@@ -15,6 +15,18 @@ generation:
 novelty:
   search_provider: web       # web | arxiv | none
   k: 5
+  # Anti-red-ocean saturation gate (OPTIONAL). For each listed slot, a candidate idea is
+  # grounded in REAL literature density (OpenAlex) + closest works, then a judge regenerates
+  # it if it is a saturated, undifferentiated "red ocean" restatement. WHICH slots to gate
+  # depends on YOUR research direction -- see the note below. Empty list ([]) turns it off.
+  #   orthogonal (default) -- the contrarian "jump to a distant domain" slot, prone to
+  #                           grabbing that domain's famous-but-saturated flagship topic.
+  #   adjacent             -- optional, if your near-core stretches keep hitting crowded ground.
+  #   highfit / random     -- NOT recommended: high-fit should exploit your (often crowded)
+  #                           core, and random is a deliberately unbiased probe; gating them
+  #                           fights their purpose and just burns API calls.
+  saturation_gate_slots:
+    - orthogonal
 
 messaging:
   channel: telegram          # telegram | none | whatsapp_baileys | whatsapp_cloud

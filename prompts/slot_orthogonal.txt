@@ -36,6 +36,12 @@ If it overlaps, defy a different preference or jump to a different distant domai
 it is clearly new.
 
 Guidance for this slot:
+- AVOID RED OCEANS. Distant does not mean famous. The trap to avoid is reaching for a far
+  domain's most well-known headline topic -- a textbook "popular-method x popular-problem"
+  pairing (e.g. graph neural networks for protein-structure prediction, transformers for
+  time-series forecasting, diffusion models for image generation). Those are saturated and
+  inspire no one. If you jump to a distant domain, find an UNDER-explored question or an
+  unusual method-problem pairing inside it, not its crowded flagship application.
 - Pick ONE concrete thing to defy: a stated structural preference, a favored method, a
   comfortable assumption, or the whole topic area -- and commit to it fully.
 - Make the contrarian move principled: why might the user be wrong, or why might the

@@ -23,6 +23,7 @@ from ..config import Config
 from .base import SearchProvider
 
 _ATOM = "{http://www.w3.org/2005/Atom}"
+_OPENSEARCH = "{http://a9.com/-/spec/opensearch/1.1/}"
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -96,6 +97,30 @@ class ArxivSearchProvider:
 
             results.append({"title": title, "url": url, "snippet": snippet})
         return results
+
+    def count(self, query: str) -> int | None:
+        """Total number of arXiv works matching `query` (opensearch:totalResults).
+
+        A grounded 'how crowded is this field' signal for the saturation gate. Uses the
+        same ANDed keyword query as search(); asks for one result and reads the count out
+        of the feed header. Best-effort: any error / non-2xx returns None (gate degrades
+        to 'density unknown').
+        """
+        terms = query.split()
+        search_query = " AND ".join(f"all:{t}" for t in terms) if terms else f"all:{query}"
+        try:
+            resp = httpx.get(
+                "https://export.arxiv.org/api/query",
+                params={"search_query": search_query, "start": 0, "max_results": 1},
+                timeout=60,
+                follow_redirects=True,
+            )
+            if not (200 <= resp.status_code < 300):
+                return None
+            el = ET.fromstring(resp.text).find(f"{_OPENSEARCH}totalResults")
+            return int(el.text) if el is not None and el.text else None
+        except Exception:
+            return None
 
 
 class _DDGParser(HTMLParser):
@@ -253,6 +278,26 @@ class OpenAlexSearchProvider:
             return out
         except Exception:
             return []
+
+    def count(self, query: str) -> int | None:
+        """Total number of OpenAlex works matching `query` (meta.count).
+
+        OpenAlex spans the whole scholarly corpus, so this is a cleaner 'red ocean'
+        meter than arXiv's preprint-only count. Best-effort: any error returns None.
+        """
+        try:
+            params: dict = {"search": query, "per_page": 1}
+            if self.api_key:
+                params["api_key"] = self.api_key
+            if self.mailto:
+                params["mailto"] = self.mailto
+            resp = httpx.get("https://api.openalex.org/works", params=params,
+                             timeout=60, follow_redirects=True)
+            if not (200 <= resp.status_code < 300):
+                return None
+            return (resp.json().get("meta") or {}).get("count")
+        except Exception:
+            return None
 
 
 class HackerNewsSearchProvider:

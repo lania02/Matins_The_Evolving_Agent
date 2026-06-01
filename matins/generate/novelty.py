@@ -38,20 +38,28 @@ def _english_terms(text: str) -> list[str]:
     return out
 
 
-def _build_query(idea: Idea) -> str:
-    """Build a focused English keyword query for arXiv.
+def build_query_from_fields(title: str, math_structure: str = "", mechanism: str = "") -> str:
+    """Build a focused English keyword query from idea fields.
 
     With Chinese-primary output the title is Chinese, so we mine the English terms
     the model annotates in parentheses across title/math/mechanism, plus any ASCII
     acronyms. arXiv is an English corpus -- a Chinese query returns nothing useful.
     Keywords are de-duplicated, stopword-filtered, and capped at four (the arXiv
     adapter ANDs them, so fewer = less likely to over-constrain to zero hits).
+
+    Shared by the post-generation novelty check and the saturation gate, so both ask
+    the corpus the same question about a given idea.
     """
-    blob = " ".join([idea.title or "", idea.math_structure or "", idea.mechanism or ""])
+    blob = " ".join([title or "", math_structure or "", mechanism or ""])
     candidates: list[str] = []
-    for term in _english_terms(blob):
+    for term in _english_terms(blob):                                       # parenthetical glosses
         candidates.extend(term.split())
-    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9\-]+", idea.title or ""))
+    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9\-]+", title or ""))            # title ASCII
+    # math_structure is terse and term-dense -- the DOMAIN + method English often lives
+    # here unglossed. Mining it keeps the query specific to the idea (method AND domain)
+    # rather than collapsing to a bare popular method name, whose corpus count would
+    # measure the method's popularity, not THIS idea's crowdedness.
+    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9\-]+", math_structure or ""))
 
     seen: set[str] = set()
     words: list[str] = []
@@ -63,7 +71,24 @@ def _build_query(idea: Idea) -> str:
         words.append(w)
 
     chosen = words[:4]
-    return " ".join(chosen) if chosen else (idea.title or "").strip()
+    return " ".join(chosen) if chosen else (title or "").strip()
+
+
+def _build_query(idea: Idea) -> str:
+    return build_query_from_fields(idea.title, idea.math_structure, idea.mechanism)
+
+
+def format_prior_art(results: list[dict]) -> str:
+    """Format the closest-prior-art note from a search result list (top hit, or none)."""
+    if results:
+        top = results[0]
+        return (
+            "closest prior art: "
+            + str(top.get("title", "")).strip()
+            + " -- "
+            + str(top.get("url", "")).strip()
+        )
+    return "[no close prior art found]"
 
 
 def attach_prior_art(
@@ -82,6 +107,9 @@ def attach_prior_art(
     """
     for idea in ideas:
         try:
+            if idea.prior_art and idea.prior_art not in ("[unchecked]", ""):
+                # Already noted by the in-loop saturation gate's search; don't search twice.
+                continue
             if search is None:
                 store.update_idea_prior_art(idea.idea_id, "[unchecked]")
                 idea.prior_art = "[unchecked]"
@@ -89,16 +117,7 @@ def attach_prior_art(
 
             query = _build_query(idea)
             results = search.search(query, k=k) or []
-            if results:
-                top = results[0]
-                prior_art = (
-                    "closest prior art: "
-                    + str(top.get("title", "")).strip()
-                    + " -- "
-                    + str(top.get("url", "")).strip()
-                )
-            else:
-                prior_art = "[no close prior art found]"
+            prior_art = format_prior_art(results)
 
             store.update_idea_prior_art(idea.idea_id, prior_art)
             idea.prior_art = prior_art

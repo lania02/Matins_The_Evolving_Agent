@@ -213,3 +213,111 @@ def test_transient_api_error_skips_slot_not_whole_batch():
     slots = [i.slot for i in ideas]
     assert "orthogonal" not in slots                     # the 429 slot was skipped, not fatal
     assert len(ideas) == 3                               # the other three still made a batch
+
+
+def _idea_json(t):
+    return (f'{{"title": "{t}", "mechanism": "m", "why_now": "w", "math_structure": "", '
+            '"tractability": "t", "fit_to_program": "f"}')
+
+
+def test_saturation_gate_regenerates_red_ocean_orthogonal():
+    # The orthogonal slot's first try is a saturated "red ocean" idea. The grounded judge
+    # (given a high literature count + closest works = B2) returns "regenerate" (B1), so the
+    # slot is retried into a fresh idea. Proves B2 (density) + B1 (judge) wire into the loop.
+    class GatedLLM:
+        def __init__(self):
+            self.judge_calls = 0
+            self.ortho_gens = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "GROUNDED EVIDENCE" in prompt:                  # the saturation judge (B1)
+                self.judge_calls += 1
+                verdict = "regenerate" if self.judge_calls == 1 else "keep"
+                return '{"verdict": "%s", "saturation": "high", "reason": "r"}' % verdict
+            if "ORTHOGONAL" in prompt:                         # checked AFTER the judge marker
+                self.ortho_gens += 1
+                return _idea_json("Red ocean GNN protein" if self.ortho_gens == 1
+                                  else "Fresh contrarian angle")
+            if "HIGH-FIT" in prompt:
+                return _idea_json("Spectral market stability")
+            if "ADJACENT-STRETCH" in prompt:
+                return _idea_json("Population genetics drift")
+            if "RANDOM-MUTATION" in prompt:
+                return _idea_json("Random matrix chaos")
+            return _RANKS                                      # self-rank
+
+    class CountingSearch:
+        def __init__(self):
+            self.counts = 0
+
+        def search(self, query, *, k=5):
+            return [{"title": "Existing flagship work", "url": "http://x"}]
+
+        def count(self, query):                                # B2 density signal
+            self.counts += 1
+            return 99999                                       # a crowded field
+
+    gate_search = CountingSearch()
+    llm = GatedLLM()
+    # search=None keeps novelty/retrieval offline; the gate runs on the injected gate_search.
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), llm, None,
+                          date="2026-03-01", gate_search=gate_search)
+
+    ortho = next(i for i in ideas if i.slot == "orthogonal")
+    assert "Fresh" in ortho.title                              # red-ocean first try regenerated
+    assert llm.judge_calls >= 2                                # judged twice: regenerate -> keep
+    assert gate_search.counts >= 1                             # B2 density was actually queried
+    assert ortho.prior_art.startswith("closest prior art")     # gate's search filled prior_art
+    assert len(ideas) == 4
+
+
+def test_saturation_gate_inactive_without_search():
+    # With no search provider the gate cannot ground itself, so it must stay off: the
+    # orthogonal slot is accepted on the first try and no judge call is made.
+    class CountingJudge:
+        def __init__(self):
+            self.judge_calls = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "GROUNDED EVIDENCE" in prompt:
+                self.judge_calls += 1
+                return '{"verdict": "regenerate"}'
+            if "single JSON object" in prompt or "RANDOM-MUTATION" in prompt:
+                return _VALID
+            return _RANKS
+
+    llm = CountingJudge()
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-03-02")
+    assert llm.judge_calls == 0                                 # gate never ran (search=None)
+    assert len(ideas) == 4
+
+
+def test_saturation_gate_slots_empty_disables_gate():
+    # The gated-slot set is configurable; an empty list turns the gate off entirely, even
+    # with a search wired -- the orthogonal candidate is accepted on the first try.
+    class CountingJudge:
+        def __init__(self):
+            self.judge_calls = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "GROUNDED EVIDENCE" in prompt:
+                self.judge_calls += 1
+                return '{"verdict": "regenerate"}'
+            if "single JSON object" in prompt or "RANDOM-MUTATION" in prompt:
+                return _VALID
+            return _RANKS
+
+    class CountingSearch:
+        def search(self, query, *, k=5):
+            return [{"title": "w", "url": "http://x"}]
+
+        def count(self, query):
+            return 99999
+
+    cfg = _cfg()
+    cfg.novelty.saturation_gate_slots = []                      # gate off by config
+    llm = CountingJudge()
+    _b, ideas = run_batch(cfg, Store(":memory:"), llm, None,
+                          date="2026-03-03", gate_search=CountingSearch())
+    assert llm.judge_calls == 0                                 # no slot gated -> judge never ran
+    assert len(ideas) == 4

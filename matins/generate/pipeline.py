@@ -17,6 +17,7 @@ from ..providers.base import LLMProvider, SearchProvider
 from ..store.db import Store, new_id, now_iso, today_iso
 from ..store.models import SLOTS, Batch, Idea
 from .explore import adaptive_temperature
+from .saturation import gate_saturation
 from .schema import IDEA_JSON_SCHEMA, IdeaParseError, parse_idea
 from .slots import (
     build_generation_prompt,
@@ -198,8 +199,17 @@ def run_batch(
     search: SearchProvider | None,
     *,
     date: str | None = None,
+    gate_search: SearchProvider | None = None,
 ) -> tuple[Batch, list[Idea]]:
-    """Run one daily batch. Idempotent per date."""
+    """Run one daily batch. Idempotent per date.
+
+    `gate_search` is the searcher the anti-red-ocean saturation gate uses to ground its
+    judgment in literature density. It is deliberately OpenAlex (corpus-wide, citation-
+    aware -- a reliable 'how crowded is this field' meter) rather than the novelty
+    `search` provider, because arXiv's preprint counts time out on busy queries exactly
+    when the gate needs them. Built here when online (search is not None) unless injected
+    (offline tests inject a fake so the gate runs without touching the network).
+    """
     date = date or today_iso()
     existing = store.batch_for_date(date)
     if existing is not None:
@@ -256,6 +266,13 @@ def run_batch(
     # provider is wired (search=None), which also keeps the offline tests network-free.
     retrieval = _fetch_retrieval(cfg, store, batch_id) if search is not None else []
 
+    # Saturation gate searcher (anti red-ocean): OpenAlex, built once for the whole batch.
+    # Only when online and at least one slot is gated; an injected gate_search (tests)
+    # bypasses construction.
+    if gate_search is None and search is not None and cfg.novelty.saturation_gate_slots:
+        from ..providers.search_web import OpenAlexSearchProvider
+        gate_search = OpenAlexSearchProvider(api_key=cfg.openalex_api_key())
+
     slots = SLOTS[: cfg.generation.n_slots]
     ideas: list[Idea] = []
     siblings: list[dict] = []          # ideas already produced THIS batch (within-batch distinctness)
@@ -267,7 +284,9 @@ def run_batch(
         # carries a hard "distinct from everything above" constraint).
         parsed = None
         used_genes = None
-        for _ in range(_SLOT_ATTEMPTS):
+        gate_on = gate_search is not None and slot in cfg.novelty.saturation_gate_slots
+        for attempt in range(_SLOT_ATTEMPTS):
+            last = attempt == _SLOT_ATTEMPTS - 1
             genes_try = sample_genes(genes_pool) if slot == "random" else None
             context = {
                 "skill": skill_text,
@@ -287,10 +306,23 @@ def run_batch(
                 # single slot must not sink the whole morning. Treat it as a failed attempt.
                 continue
             parsed, used_genes = candidate, genes_try        # remember the latest good parse
-            # Accept high-fit as-is (it SHOULD aim at the core); for the other slots, reject a
-            # near-duplicate of a sibling and retry -- keeping this one as a fallback.
-            if slot == "highfit" or not _too_similar(candidate.get("title", ""), siblings):
-                break
+            # Within-batch distinctness: for non-high-fit slots reject a near-duplicate of a
+            # sibling and retry (high-fit SHOULD aim at the core). Keep the last try as fallback.
+            if slot != "highfit" and not last and _too_similar(candidate.get("title", ""), siblings):
+                continue
+            # Anti-red-ocean saturation gate (B2 literature density -> B1 grounded judge):
+            # orthogonal only, only with a live search to ground it. Regenerate a saturated,
+            # undifferentiated idea; the SAME search fills prior_art so novelty won't re-search
+            # it. On the last attempt keep what we have (never drop below n_slots ideas).
+            if gate_on:
+                passed, prior_note = gate_saturation(
+                    llm, gate_search, candidate, k=cfg.novelty.k,
+                    prompts_dir=prompts_dir, output_language=cfg.generation.output_language,
+                )
+                candidate["prior_art"] = prior_note
+                if not passed and not last:
+                    continue
+            break
         if parsed is None:
             # Resilience (DESIGN.md philosophy): skip this slot and keep what parsed.
             print(f"[warning] slot '{slot}' could not be generated after {_SLOT_ATTEMPTS} "

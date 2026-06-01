@@ -31,6 +31,19 @@ class GenerationCfg:
 class NoveltyCfg:
     search_provider: str = "web"     # web | arxiv | none
     k: int = 5
+    # Anti-red-ocean saturation gate (OPTIONAL). For each listed slot, a candidate idea is
+    # grounded in REAL literature density + closest works via OpenAlex (B2), then a judge
+    # regenerates it if it is a saturated, undifferentiated "red ocean" restatement (B1).
+    # WHICH slots to gate is a personal call that depends on YOUR research direction:
+    #   - orthogonal (default): the contrarian "jump to a distant domain" slot is the one
+    #     prone to grabbing that domain's famous-but-saturated flagship topic.
+    #   - adjacent: optional -- add it if your near-core stretches keep landing on crowded
+    #     ground.
+    #   - highfit / random: usually a BAD idea -- high-fit is meant to EXPLOIT your
+    #     (possibly crowded) core, and the random slot is a deliberately unbiased probe;
+    #     gating them fights their purpose and just costs API calls.
+    # Empty list = gate off. Inactive offline anyway (no search provider wired).
+    saturation_gate_slots: list[str] = field(default_factory=lambda: ["orthogonal"])
 
 
 @dataclass
