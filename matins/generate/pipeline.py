@@ -8,6 +8,7 @@ run for the same date returns the existing batch unchanged.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +38,29 @@ _REPAIR_INSTRUCTION = (
 # perturbation slot fails to yield JSON, and dropping it leaves <n_slots ideas that
 # over-fit the batch to the user's existing work.
 _SLOT_ATTEMPTS = 3
+
+
+def _title_tokens(title: str) -> set:
+    """Tokens of a title for crude similarity: CJK characters + English words (len>2)."""
+    s = (title or "").lower()
+    return set(re.findall(r"[一-鿿]", s)) | {w for w in re.findall(r"[a-z0-9]+", s) if len(w) > 2}
+
+
+def _too_similar(title: str, siblings: list, *, threshold: float = 0.8) -> bool:
+    """True if `title` overlaps any sibling's title at/above `threshold`.
+
+    The prompt-level "distinct from above" constraint is not always honored (a weaker
+    model can restate high-fit verbatim in the adjacent slot), so this is a deterministic
+    backstop: a slot that merely echoes an idea already produced this batch is retried.
+    """
+    t = _title_tokens(title)
+    if not t:
+        return False
+    for s in siblings:
+        o = _title_tokens(s.get("title", ""))
+        if o and len(t & o) / max(len(t), len(o)) >= threshold:
+            return True
+    return False
 
 
 def _read_interest_seed(cfg: Config) -> str:
@@ -244,7 +268,7 @@ def run_batch(
         parsed = None
         used_genes = None
         for _ in range(_SLOT_ATTEMPTS):
-            used_genes = sample_genes(genes_pool) if slot == "random" else None
+            genes_try = sample_genes(genes_pool) if slot == "random" else None
             context = {
                 "skill": skill_text,
                 "fast_memory": fast_memory,
@@ -254,13 +278,17 @@ def run_batch(
                 "archive": revival,
             }
             prompt = build_generation_prompt(
-                slot, context, prompts_dir, cfg.generation.output_language, used_genes
+                slot, context, prompts_dir, cfg.generation.output_language, genes_try
             )
             try:
-                parsed = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
-                break
+                candidate = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
             except IdeaParseError:
-                parsed = None
+                continue
+            parsed, used_genes = candidate, genes_try        # remember the latest good parse
+            # Accept high-fit as-is (it SHOULD aim at the core); for the other slots, reject a
+            # near-duplicate of a sibling and retry -- keeping this one as a fallback.
+            if slot == "highfit" or not _too_similar(candidate.get("title", ""), siblings):
+                break
         if parsed is None:
             # Resilience (DESIGN.md philosophy): a slot that still won't yield JSON must
             # not sink the whole morning. Skip it and keep what parsed.

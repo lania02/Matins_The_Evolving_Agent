@@ -159,3 +159,33 @@ def test_siblings_injected_for_within_batch_distinctness():
     run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-02-11")
     adjacent_prompt = next(p for p in llm.prompts if "ADJACENT-STRETCH" in p)
     assert "TITLE1" in adjacent_prompt                   # the high-fit sibling is shown to adjacent
+
+
+def test_within_batch_duplicate_is_rejected_and_retried():
+    # If a slot restates a sibling verbatim (the model ignoring the "distinct" prompt),
+    # the deterministic backstop rejects it and retries to something genuinely different.
+    def _idea(t):
+        return (f'{{"title": "{t}", "mechanism": "m", "why_now": "w", "math_structure": "", '
+                '"tractability": "t", "fit_to_program": "f"}')
+
+    class DupAdjacentLLM:
+        def __init__(self):
+            self.adj = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "HIGH-FIT" in prompt:
+                return _idea("Spectral radius market stability")
+            if "ADJACENT-STRETCH" in prompt:
+                self.adj += 1
+                return _idea("Spectral radius market stability") if self.adj == 1 \
+                    else _idea("Population genetics drift model")
+            if "ORTHOGONAL" in prompt:
+                return _idea("Orthogonal contrarian probe")
+            if "RANDOM-MUTATION" in prompt:
+                return _idea("Random mutation perturbation")
+            return _RANKS
+
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), DupAdjacentLLM(), None, date="2026-02-12")
+    adjacent = next(i for i in ideas if i.slot == "adjacent")
+    assert "Population genetics" in adjacent.title       # the verbatim duplicate was rejected
+    assert len(ideas) == 4
