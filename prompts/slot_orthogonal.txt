@@ -27,8 +27,13 @@ Use this to locate a domain that is genuinely DISTANT from these interests.
 {{RECENT_IDEAS}}
 
 HARD CONSTRAINT: your contrarian idea must also be distinct from every entry listed
-above -- do not recycle a previous day's contrarian move. If it overlaps, defy a
-different preference or jump to a different distant domain until it is clearly new.
+above -- do not recycle a previous day's contrarian move. In particular, if TODAY's
+other ideas above already lean on a specific method or mathematical object (e.g. a
+particular operator, process, or quantity), you MUST NOT build on that same core: pick
+a genuinely different toolkit AND a different domain. Reusing today's dominant method
+in a new subsystem is NOT orthogonal -- it is the failure this slot exists to prevent.
+If it overlaps, defy a different preference or jump to a different distant domain until
+it is clearly new.
 
 Guidance for this slot:
 - Pick ONE concrete thing to defy: a stated structural preference, a favored method, a
