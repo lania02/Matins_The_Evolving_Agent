@@ -282,7 +282,9 @@ def run_batch(
             )
             try:
                 candidate = _generate_one(llm, prompt, slot_temperature(explore_temp, slot))
-            except IdeaParseError:
+            except (IdeaParseError, RuntimeError):
+                # Bad JSON OR a transient provider/API error (e.g. a 429 rate limit): a
+                # single slot must not sink the whole morning. Treat it as a failed attempt.
                 continue
             parsed, used_genes = candidate, genes_try        # remember the latest good parse
             # Accept high-fit as-is (it SHOULD aim at the core); for the other slots, reject a
@@ -290,10 +292,9 @@ def run_batch(
             if slot == "highfit" or not _too_similar(candidate.get("title", ""), siblings):
                 break
         if parsed is None:
-            # Resilience (DESIGN.md philosophy): a slot that still won't yield JSON must
-            # not sink the whole morning. Skip it and keep what parsed.
-            print(f"[warning] slot '{slot}' returned no valid JSON after {_SLOT_ATTEMPTS} "
-                  "attempts; skipping it.", file=sys.stderr)
+            # Resilience (DESIGN.md philosophy): skip this slot and keep what parsed.
+            print(f"[warning] slot '{slot}' could not be generated after {_SLOT_ATTEMPTS} "
+                  "attempts (bad JSON or a provider/API error); skipping it.", file=sys.stderr)
             continue
         idea = Idea(
             idea_id=new_id(),

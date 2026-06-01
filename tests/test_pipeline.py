@@ -189,3 +189,27 @@ def test_within_batch_duplicate_is_rejected_and_retried():
     adjacent = next(i for i in ideas if i.slot == "adjacent")
     assert "Population genetics" in adjacent.title       # the verbatim duplicate was rejected
     assert len(ideas) == 4
+
+
+def test_transient_api_error_skips_slot_not_whole_batch():
+    # A 429-style provider error on one slot must degrade to a smaller batch, not crash.
+    def _idea(t):
+        return (f'{{"title": "{t}", "mechanism": "m", "why_now": "w", "math_structure": "", '
+                '"tractability": "t", "fit_to_program": "f"}')
+
+    class OrthoErrorsLLM:
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "ORTHOGONAL" in prompt:
+                raise RuntimeError("OpenAI-compatible API error 429: Too Many Requests")
+            if "HIGH-FIT" in prompt:
+                return _idea("Spectral market stability")
+            if "ADJACENT-STRETCH" in prompt:
+                return _idea("Population genetics drift")
+            if "RANDOM-MUTATION" in prompt:
+                return _idea("Random matrix chaos")
+            return _RANKS
+
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), OrthoErrorsLLM(), None, date="2026-02-13")
+    slots = [i.slot for i in ideas]
+    assert "orthogonal" not in slots                     # the 429 slot was skipped, not fatal
+    assert len(ideas) == 3                               # the other three still made a batch
