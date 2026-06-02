@@ -7,11 +7,14 @@ simply flags ideas as '[unchecked]'.
 """
 from __future__ import annotations
 
+import logging
 import re
 
 from ..providers.base import SearchProvider
 from ..store.db import Store
 from ..store.models import Idea
+
+logger = logging.getLogger("matins.novelty")
 
 
 # Generic words that hurt arXiv relevance ranking if left in the query.
@@ -124,6 +127,8 @@ def attach_prior_art(
 
             urls = [str(r.get("url", "")).strip() for r in results if r.get("url")]
             store.log_retrieval(batch_id, query, "novelty", urls)
-        except Exception:
-            # Advisory step: never let one idea break the batch.
+        except Exception as exc:
+            # Advisory step: never let one idea break the batch -- but log it, so a
+            # systematically failing search isn't silently read as "no prior art".
+            logger.warning("prior-art search failed for idea %s: %s", idea.idea_id, exc)
             continue

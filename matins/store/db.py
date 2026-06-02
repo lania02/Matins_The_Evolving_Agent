@@ -120,8 +120,15 @@ class Store:
     def __init__(self, path: str | Path):
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.path)
+        # timeout: wait up to 30s for a lock instead of the 5s default, since `run` (slow
+        # LLM) and `collect` can overlap. WAL lets a reader and the writer proceed at once;
+        # foreign_keys=ON actually enforces the REFERENCES (per-connection, OFF by default in
+        # SQLite) -- safe here because inserts go parent-before-child and nothing is deleted.
+        self.conn = sqlite3.connect(self.path, timeout=30.0)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=30000")
+        self.conn.execute("PRAGMA foreign_keys=ON")
         self.init_schema()
 
     def init_schema(self) -> None:
@@ -235,12 +242,13 @@ class Store:
 
     # ---- derived events (memory kernels) ---------------------------------
     def recent_events(self, window_days: int, stride: int = 1) -> list[dict]:
-        """Ordered (idea + its feedback) events within a window, coarsely sampled.
+        """Ordered (idea + its feedback) events within a window, optionally subsampled.
 
         The log is treated as a time series of events. `window_days` bounds how far
-        back we look; `stride` samples every Nth *batch* (oldest-first), acting as the
-        low-pass filter described in DESIGN.md section 5. Returns flat event dicts for
-        the selected batches, oldest first.
+        back we look; `stride` keeps every Nth *batch* (oldest-first) -- optional
+        decimation to shrink the prompt, NOT a denoising filter (DESIGN.md section 5).
+        Default stride=1 keeps the whole window. Returns flat event dicts for the
+        selected batches, oldest first.
         """
         cutoff = _cutoff_date(window_days)
         rows = self.conn.execute(

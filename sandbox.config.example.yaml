@@ -41,7 +41,7 @@ messaging:
 
 memory_kernels:
   - { name: fast, window_days: 3,  stride: 1, aggregator: llm_summarize_recent,  feeds: generation }
-  - { name: slow, window_days: 30, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation }
+  - { name: slow, window_days: 30, stride: 1, aggregator: llm_propose_skill_diff, feeds: consolidation }
 
 retrieval:
   sources:                    # seed from your interests; feeds FRESH RETRIEVAL

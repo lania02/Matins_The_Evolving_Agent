@@ -13,7 +13,7 @@ generation:
   output_language: bilingual # en | zh | bilingual
 
 novelty:
-  search_provider: web       # web | arxiv | none
+  search_provider: openalex  # openalex | arxiv | web | none
   k: 5
   # Anti-red-ocean saturation gate (OPTIONAL). For each listed slot, a candidate idea is
   # grounded in REAL literature density (OpenAlex) + closest works, then a judge regenerates
@@ -37,7 +37,7 @@ messaging:
 
 memory_kernels:
   - { name: fast, window_days: 3,  stride: 1, aggregator: llm_summarize_recent,  feeds: generation }
-  - { name: slow, window_days: 30, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation }
+  - { name: slow, window_days: 30, stride: 1, aggregator: llm_propose_skill_diff, feeds: consolidation }
 
 consolidation:
   cadence_days: 7

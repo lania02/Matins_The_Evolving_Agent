@@ -47,3 +47,11 @@ def test_dotenv_does_not_override_existing_env(tmp_path, monkeypatch) -> None:
     env.write_text("MATINS_TEST_KEY3=fromfile\n", encoding="utf-8")
     load_dotenv(env)
     assert os.environ["MATINS_TEST_KEY3"] == "real"  # existing OS env wins
+
+
+def test_default_kernels_keep_the_whole_window() -> None:
+    # Regression: neither kernel may decimate the log by default. A slow stride>1 silently
+    # dropped most batches before consolidation ever saw them (the log is the asset).
+    cfg = load_config(REPO_ROOT / "does_not_exist.yaml")   # code defaults
+    assert cfg.fast_kernel is not None and cfg.fast_kernel.stride == 1
+    assert cfg.slow_kernel is not None and cfg.slow_kernel.stride == 1

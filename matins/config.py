@@ -29,7 +29,7 @@ class GenerationCfg:
 
 @dataclass
 class NoveltyCfg:
-    search_provider: str = "web"     # web | arxiv | none
+    search_provider: str = "openalex"  # openalex | arxiv | web | none
     k: int = 5
     # Anti-red-ocean saturation gate (OPTIONAL). For each listed slot, a candidate idea is
     # grounded in REAL literature density + closest works via OpenAlex (B2), then a judge
@@ -108,7 +108,7 @@ class DeepDiveCfg:
 
 DEFAULT_KERNELS = [
     MemoryKernelCfg("fast", 7, 1, "llm_summarize_recent", "generation"),
-    MemoryKernelCfg("slow", 75, 5, "llm_propose_skill_diff", "consolidation"),
+    MemoryKernelCfg("slow", 75, 1, "llm_propose_skill_diff", "consolidation"),
 ]
 
 

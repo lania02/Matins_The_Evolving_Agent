@@ -159,3 +159,24 @@ def test_archive_revival_one_elite_per_behavior_cell() -> None:
     out = store.archive_revival(dormant_days=21, limit=5, max_rank=2)
     assert len(out) == 1                      # collapsed to one cell
     assert out[0]["title"] == "best"          # elite = best-ranked exemplar
+
+
+def test_connection_pragmas_enabled(tmp_path) -> None:
+    # WAL needs a real file (it is a no-op on :memory:). busy_timeout + foreign_keys are
+    # per-connection hardening: concurrency (run/collect overlap) + real referential integrity.
+    store = Store(tmp_path / "t.db")
+    assert store.conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    assert store.conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    assert store.conn.execute("PRAGMA busy_timeout").fetchone()[0] >= 30000
+
+
+def test_foreign_keys_reject_orphan_child(tmp_path) -> None:
+    # feedback.idea_id REFERENCES ideas(idea_id): with enforcement ON, feedback for a
+    # non-existent idea is rejected rather than silently creating a dangling row.
+    import sqlite3
+
+    import pytest
+
+    store = Store(tmp_path / "t2.db")
+    with pytest.raises(sqlite3.IntegrityError):
+        store.insert_feedback(Feedback(idea_id="ghost", user_rank=1, source="cli"))

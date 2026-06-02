@@ -1,8 +1,9 @@
 """Memory kernels: time-series reads of the event log (DESIGN.md section 5).
 
 The two memory tiers are *reads* of the append-only log, never separately
-maintained state. A kernel is parameterised by a window, a stride (low-pass
-sampling), and an aggregator that turns the raw events into either a fast
+maintained state. A kernel is parameterised by a window, a stride (optional
+every-Nth-batch subsampling to shrink the prompt; default 1 = keep all, NOT a
+low-pass filter), and an aggregator that turns the raw events into either a fast
 generation hint or a slow proposed skill diff. Both aggregators run the LLM;
 the calling daily loop must never crash on an advisory step.
 """

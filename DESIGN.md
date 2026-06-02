@@ -49,8 +49,8 @@ Five principles, each tied to a known failure mode.
 
 3. **The log is the asset; memory is a derived view.** An append-only local database
    stores raw material. The "two-tier memory" is **not** a separately maintained state —
-   it is *computed from the log by convolving temporal kernels with different windows and
-   strides* (§5). Consequence: you never commit to a consolidation rule now; you log
+   it is *computed from the log by reading windows of different lengths and aggregating each
+   with an LLM* (§5). Consequence: you never commit to a consolidation rule now; you log
    everything and treat consolidation as a tunable transform you can revise or backtest later.
 
 4. **Rankings are noisy measurements.** A tired morning is not a preference. Nothing is
@@ -175,7 +175,7 @@ losing anything. That is the whole point of logging raw material first.
 
 ---
 
-## 5. Memory as convolution over the log
+## 5. Memory as windowed reads of the log
 
 Treat the ordered feedback log as a time series of events `E = [e_1 ... e_t]` (each `e`
 = one idea + its feedback). A **memory kernel** is a windowed aggregation over `E`:
@@ -189,15 +189,18 @@ memory_kernels:
   feeds: generation                  # injected fresh each day
 - name: slow
   window_days: 75       # long horizon
-  stride: 5             # coarse sampling -> smooths out single-day noise
-  aggregator: llm_propose_skill_diff # stable structure, denoised
+  stride: 1             # every batch (default); stride>1 = optional batch subsampling
+  aggregator: llm_propose_skill_diff # consolidated, stable structure
   feeds: consolidation               # proposes skill edits (human-approved)
 ```
 
 - **Fast memory** = short window, stride 1 → dense, recent, drift-sensitive. Recomputed
   every morning and inlined into the generation prompt.
-- **Slow memory** = long window, large stride → sparse sampling over a long horizon, which
-  acts as a low-pass filter (the stride is the denoiser). Feeds consolidation.
+- **Slow memory** = long window → many days of feedback aggregated by the LLM into a
+  proposed skill diff. Feeds consolidation. (An optional `stride>1` subsamples batches to
+  shrink the prompt; that is plain decimation, *not* a low-pass filter — the default is `1`,
+  i.e. keep the whole window. Genuine denoising is the consolidation recurrence threshold +
+  human approval, §8, not the sampling step.)
 
 Properties this buys us:
 - **Recomputable & reconfigurable.** Window/stride/aggregator are config, not code.
@@ -442,7 +445,7 @@ messaging:
 
 memory_kernels:
   - {name: fast, window_days: 7,  stride: 1, aggregator: llm_summarize_recent, feeds: generation}
-  - {name: slow, window_days: 75, stride: 5, aggregator: llm_propose_skill_diff, feeds: consolidation}
+  - {name: slow, window_days: 75, stride: 1, aggregator: llm_propose_skill_diff, feeds: consolidation}
 
 consolidation:
   cadence_days: 7
@@ -513,5 +516,5 @@ batch per date). If you reply late, `matins collect` just picks the replies up o
    OpenAI-compatible model as the tested reference path for non-Claude users?
 4. **Retrieval sources** — which arXiv categories / venues / feeds seed `retrieval.sources`?
    (Needs your actual interest list to be useful on day one.)
-5. **Memory kernel defaults** — fast 7d / slow 75d×stride 5 are guesses; adjust?
+5. **Memory kernel defaults** — fast 7d / slow 75d (stride 1, keep the whole window) are guesses; adjust?
 6. **Name** — resolved: renamed to **Matins**.

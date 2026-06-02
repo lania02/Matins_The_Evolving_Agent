@@ -94,7 +94,14 @@ def test_format_sources_fences_and_defangs_injection() -> None:
 
 
 def test_deep_dive_store_roundtrip() -> None:
+    from matins.store.db import now_iso, today_iso
+    from matins.store.models import Batch
+
     store = Store(":memory:")
+    # A deep dive REFERENCES a real idea (foreign_keys=ON), so seed its parent first.
+    store.insert_batch(Batch(batch_id="b1", date=today_iso(), provider="x", model="m",
+                             created_at=now_iso()))
+    store.insert_idea(Idea(idea_id="i1", batch_id="b1", slot="highfit", idx=1, title="T"))
     store.save_deep_dive("i1", "the brief", '[{"url": "u"}]')
     assert store.get_deep_dive("i1")["brief"] == "the brief"
     store.save_deep_dive("i1", "updated", "[]")                 # upsert

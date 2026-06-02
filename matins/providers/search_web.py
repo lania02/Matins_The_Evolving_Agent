@@ -11,6 +11,7 @@ can be slotted in here behind the same `search(query, *, k=5)` signature.
 """
 from __future__ import annotations
 
+import logging
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -29,14 +30,25 @@ _USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
 
+# Advisory searches swallow failures so the daily loop never crashes -- but a swallowed
+# failure must be DISTINGUISHABLE from a genuine empty result, or novelty silently degrades
+# to "[no close prior art found]" for weeks. These adapters log a warning before returning
+# the empty/None fallback. WARNING+ reaches stderr (-> cron.log) without any logging setup.
+logger = logging.getLogger("matins.search")
+
 
 def get_search_provider(cfg: Config) -> SearchProvider:
     """Return the concrete search adapter named by cfg.novelty.search_provider.
 
-    Anything other than 'arxiv' falls back to the web adapter (the default).
+    'openalex' (the default) is corpus-wide and cross-domain; 'arxiv' is keyless and
+    preprint-only; anything else falls back to the DuckDuckGo web adapter (least reliable,
+    silently rate-limited). The 'none' case is handled upstream in providers.base.
     """
-    if cfg.novelty.search_provider == "arxiv":
+    name = cfg.novelty.search_provider
+    if name == "arxiv":
         return ArxivSearchProvider()
+    if name == "openalex":
+        return OpenAlexSearchProvider(api_key=cfg.openalex_api_key())
     return WebSearchProvider()
 
 
@@ -116,10 +128,12 @@ class ArxivSearchProvider:
                 follow_redirects=True,
             )
             if not (200 <= resp.status_code < 300):
+                logger.warning("arxiv count HTTP %s for %r", resp.status_code, query)
                 return None
             el = ET.fromstring(resp.text).find(f"{_OPENSEARCH}totalResults")
             return int(el.text) if el is not None and el.text else None
-        except Exception:
+        except Exception as exc:
+            logger.warning("arxiv count failed for %r: %s", query, exc)
             return None
 
 
@@ -185,11 +199,13 @@ class WebSearchProvider:
                 follow_redirects=True,
             )
             if not (200 <= resp.status_code < 300):
+                logger.warning("web search HTTP %s for %r", resp.status_code, query)
                 return []
             parser = _DDGParser()
             parser.feed(resp.text)
             return parser.results[:k]
-        except Exception:
+        except Exception as exc:
+            logger.warning("web search failed for %r: %s", query, exc)
             return []
 
 
@@ -267,6 +283,7 @@ class OpenAlexSearchProvider:
             resp = httpx.get("https://api.openalex.org/works", params=params,
                              timeout=60, follow_redirects=True)
             if not (200 <= resp.status_code < 300):
+                logger.warning("openalex search HTTP %s for %r", resp.status_code, query)
                 return []
             out: list[dict] = []
             for w in (resp.json().get("results") or []):
@@ -276,7 +293,8 @@ class OpenAlexSearchProvider:
                 if title:
                     out.append({"title": title, "url": url, "snippet": snippet})
             return out
-        except Exception:
+        except Exception as exc:
+            logger.warning("openalex search failed for %r: %s", query, exc)
             return []
 
     def count(self, query: str) -> int | None:
@@ -294,9 +312,11 @@ class OpenAlexSearchProvider:
             resp = httpx.get("https://api.openalex.org/works", params=params,
                              timeout=60, follow_redirects=True)
             if not (200 <= resp.status_code < 300):
+                logger.warning("openalex count HTTP %s for %r", resp.status_code, query)
                 return None
             return (resp.json().get("meta") or {}).get("count")
-        except Exception:
+        except Exception as exc:
+            logger.warning("openalex count failed for %r: %s", query, exc)
             return None
 
 
