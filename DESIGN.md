@@ -390,7 +390,7 @@ matins/
   prompts/
     slot_highfit.txt slot_adjacent.txt slot_orthogonal.txt slot_random.txt
     self_rank.txt summarize_recent.txt propose_skill_diff.txt
-    genes.yaml interest_seed.md
+    genes.yaml interest_seed.example.md
   skills/
     taste.md                # human-readable mirror of the active skill version
   matins/

@@ -66,7 +66,12 @@ def _too_similar(title: str, siblings: list, *, threshold: float = 0.8) -> bool:
 
 def _read_interest_seed(cfg: Config) -> str:
     path = cfg.interest_seed_path()
-    return path.read_text(encoding="utf-8") if path.exists() else ""
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    # The real interest_seed.md is personal and gitignored; a fresh clone ships only
+    # the .example template. Fall back to it so generation still has a seed out of the box.
+    example = path.with_name(path.stem + ".example" + path.suffix)
+    return example.read_text(encoding="utf-8") if example.exists() else ""
 
 
 def _read_active_skill(cfg: Config, store: Store) -> tuple[str, int | None]:

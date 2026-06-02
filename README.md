@@ -81,9 +81,10 @@ Edit `config.yaml` (see [`config.example.yaml`](config.example.yaml) and DESIGN 
 - **Messaging** — `telegram` by default. Create a bot via BotFather, then:
   `export MATINS_TELEGRAM_TOKEN=...` and run `matins init-telegram` to discover
   your `chat_id`. Set `channel: none` to use the CLI only.
-- **Interests** — fill in [`prompts/interest_seed.md`](prompts/interest_seed.md)
-  (your standing interests, always fed) and `retrieval.sources` (keyword queries
-  for the daily fresh-literature feed) so ideas are actually about your field.
+- **Interests** — copy [`prompts/interest_seed.example.md`](prompts/interest_seed.example.md)
+  to `prompts/interest_seed.md` and fill it in (your standing interests, always fed;
+  the real file is gitignored so it stays personal). Also set `retrieval.sources`
+  (keyword queries for the daily fresh-literature feed) so ideas are about your field.
 - **Fresh-literature feed** — each morning the generator blends a small, balanced
   set of fresh items across sources, tagged by origin in the prompt:
   - `openalex` (scholarly, cross-domain, citation-aware) and `arxiv` (fresh
@@ -177,9 +178,8 @@ matins/
   cli.py  __main__.py
 prompts/      slot_*.txt self_rank.txt predict_rank.txt summarize_recent.txt
               propose_skill_diff.txt propose_dimension.txt saturation_judge.txt
-              deepdive_*.txt genes.yaml interest_seed.md
+              deepdive_*.txt genes.yaml interest_seed.example.md
 skills/       taste.md     human-readable mirror of the active skill version
-algo-upgrade-plan.md        the adaptive / self-evolution upgrade plan (Phases 1-5)
 data/         matins.db    (gitignored)
 deep_dives/   <slug>.md    deep-dive briefings (gitignored)
 favorites.md  curated "must try" ideas (gitignored)

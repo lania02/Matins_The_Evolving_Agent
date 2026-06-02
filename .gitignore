@@ -23,6 +23,13 @@ deep_dives/
 # DB visualization (derived from the DB; contains your research ideas)
 view.md
 
+# Personal research agenda (your real interests; copy interest_seed.example.md to create it)
+prompts/interest_seed.md
+
+# Self-authored planning / critique drafts (internal working notes, not for publication)
+algo-upgrade-plan.md
+algo-update.md
+
 # Python
 __pycache__/
 *.py[cod]
