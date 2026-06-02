@@ -27,6 +27,39 @@ def escape_markdown_v2(text: str) -> str:
     return "".join(out)
 
 
+def _replies_from_updates(updates: list, chat_id: str | None) -> list[Reply]:
+    """Build Reply objects from raw getUpdates results, keeping ONLY the owner's messages.
+
+    SECURITY (the bot username is public, so anyone can message it and Telegram returns
+    their messages here): without an identity check a stranger's text would be ingested as
+    the owner's feedback (taste-log poisoning) or trigger a `dig` -- an unauthenticated,
+    remote LLM+web-search call billed to the owner's key. We therefore DROP every update
+    whose `message.chat.id` does not equal the configured `chat_id`. When `chat_id` is
+    unset there is no owner to trust, so nothing qualifies. Sorted by update_id.
+    """
+    want = str(chat_id) if chat_id else ""
+    replies: list[Reply] = []
+    for update in updates:
+        msg = update.get("message")
+        if not msg or "text" not in msg:
+            continue
+        if not want or str((msg.get("chat") or {}).get("id", "")) != want:
+            continue                                      # not from the owner chat -> ignore
+        reply_to = None
+        if "reply_to_message" in msg:
+            reply_to = str(msg["reply_to_message"]["message_id"])
+        replies.append(
+            Reply(
+                text=msg["text"],
+                ts=str(msg["date"]),
+                reply_to_message_id=reply_to,
+                update_id=str(update["update_id"]),
+            )
+        )
+    replies.sort(key=lambda r: int(r["update_id"]))
+    return replies
+
+
 class TelegramProvider:
     """MessagingProvider over the Telegram Bot API."""
 
@@ -75,25 +108,8 @@ class TelegramProvider:
                 )
             data = resp.json()
 
-        replies: list[Reply] = []
-        for update in data.get("result", []):
-            msg = update.get("message")
-            if not msg or "text" not in msg:
-                continue
-            reply_to = None
-            if "reply_to_message" in msg:
-                reply_to = str(msg["reply_to_message"]["message_id"])
-            replies.append(
-                Reply(
-                    text=msg["text"],
-                    ts=str(msg["date"]),
-                    reply_to_message_id=reply_to,
-                    update_id=str(update["update_id"]),
-                )
-            )
-
-        replies.sort(key=lambda r: int(r["update_id"]))
-        return replies
+        # Identity check happens here: only the configured owner chat's messages survive.
+        return _replies_from_updates(data.get("result", []), self.chat_id)
 
     def discover_chat_ids(self) -> list[dict]:
         """List distinct chats that have messaged the bot (helper for setup).

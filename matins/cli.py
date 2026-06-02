@@ -92,7 +92,9 @@ def cmd_run(args) -> int:
 
 # ---- matins collect ------------------------------------------------------
 def cmd_collect(args) -> int:
-    from .feedback.capture import classify_comment, ingest_must_try, ingest_replies
+    from .feedback.capture import (
+        classify_comment, ingest_must_try, ingest_replies, replies_for_batch,
+    )
     from .feedback.diverge import reflect_on_batch
 
     cfg = _bootstrap(args)
@@ -110,7 +112,10 @@ def cmd_collect(args) -> int:
     llm = get_llm_provider(cfg)
     offset = store.get_offset(cfg.messaging.channel)
     replies = messaging.fetch_replies(offset)
-    n = ingest_replies(store, batch, replies, source=cfg.messaging.channel,
+    # fetch_replies already dropped anyone but the owner (chat-id check); bind the survivors
+    # to THIS batch so a late reply to an older digest is not mis-logged onto today's.
+    bound = replies_for_batch(replies, batch.digest_msg_id)
+    n = ingest_replies(store, batch, bound, source=cfg.messaging.channel,
                        classify=lambda c: classify_comment(llm, c))
     if replies:
         store.set_offset(cfg.messaging.channel, replies[-1]["update_id"])
@@ -118,7 +123,7 @@ def cmd_collect(args) -> int:
     tau = reflect_on_batch(cfg, store, llm, batch)
     print(f"ingested {n} feedback row(s); self-vs-user tau = {tau}")
 
-    favs = ingest_must_try(store, batch, replies)
+    favs = ingest_must_try(store, batch, bound)
     if favs:
         from .digest.render import render_favorites_md
         cfg.favorites_path().write_text(
@@ -128,7 +133,7 @@ def cmd_collect(args) -> int:
 
     from .feedback.capture import parse_dig
     ideas_by_idx = {i.idx: i for i in store.ideas_for_batch(batch.batch_id)}
-    dig_text = "\n".join(r.get("text", "") for r in replies)
+    dig_text = "\n".join(r.get("text", "") for r in bound)
     for idx in parse_dig(dig_text, len(ideas_by_idx)):
         idea = ideas_by_idx.get(idx)
         if idea is None:

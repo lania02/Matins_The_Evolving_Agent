@@ -39,6 +39,29 @@ def test_parse_ranking_extracts_comments() -> None:
     assert "note" in comments[3]
 
 
+def test_replies_for_batch_binds_to_digest() -> None:
+    from matins.feedback.capture import replies_for_batch
+
+    replies = [
+        {"text": "to this batch", "reply_to_message_id": "100"},   # replies to our digest
+        {"text": "direct message", "reply_to_message_id": None},   # no target -> this batch
+        {"text": "to yesterday", "reply_to_message_id": "57"},     # older digest -> dropped
+    ]
+    kept = [r["text"] for r in replies_for_batch(replies, "100")]
+    assert kept == ["to this batch", "direct message"]             # cross-batch reply excluded
+
+
+def test_replies_for_batch_without_digest_takes_only_direct() -> None:
+    from matins.feedback.capture import replies_for_batch
+
+    replies = [
+        {"text": "direct", "reply_to_message_id": None},
+        {"text": "reply to something", "reply_to_message_id": "9"},
+    ]
+    # digest never sent (None) -> only no-reply direct messages qualify.
+    assert [r["text"] for r in replies_for_batch(replies, None)] == ["direct"]
+
+
 def test_kendall_tau_perfect_agreement() -> None:
     assert kendall_tau([1, 2, 3, 4], [1, 2, 3, 4]) == 1.0
 

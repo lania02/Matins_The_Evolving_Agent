@@ -18,7 +18,13 @@ from pathlib import Path
 from ..providers.base import LLMProvider, SearchProvider
 from .novelty import build_query_from_fields, format_prior_art
 from .schema import strip_code_fences
-from .slots import load_prompt, output_language_instruction, render_template
+from .slots import (
+    defang_untrusted,
+    fence_untrusted,
+    load_prompt,
+    output_language_instruction,
+    render_template,
+)
 
 
 def field_density(search: SearchProvider, query: str) -> int | None:
@@ -60,9 +66,10 @@ def _build_judge_prompt(
     candidate: dict, density: int | None, results: list[dict],
     prompts_dir: str | Path, output_language: str,
 ) -> str:
-    closest = "\n".join(
-        f"- {str(r.get('title', '')).strip()}" for r in results[:5] if r.get("title")
-    ) or "(none found)"
+    closest = fence_untrusted("\n".join(
+        f"- {defang_untrusted(str(r.get('title', '')).strip())}"
+        for r in results[:5] if r.get("title")
+    ) or "(none found)")
     tokens = {
         "TITLE": candidate.get("title", ""),
         "MECHANISM": candidate.get("mechanism", ""),

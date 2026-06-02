@@ -152,6 +152,24 @@ def _ingest_text(store, batch, text: str, source: str, *, classify=None) -> int:
     return count
 
 
+def replies_for_batch(replies, digest_msg_id):
+    """Keep only replies that belong to THIS batch.
+
+    A reply belongs to the batch if it is a direct message (no reply target) or an explicit
+    reply to the batch's own digest. A reply aimed at some OTHER message -- typically an
+    older batch's digest -- is dropped, so a late reply is never silently misattributed to
+    today's batch (DESIGN.md section 14): the daily log is the asset, so a wrong attribution
+    corrupts it. With an empty `digest_msg_id` (digest never sent) only direct messages
+    qualify.
+    """
+    out = []
+    for r in replies:
+        rt = r.get("reply_to_message_id")
+        if rt is None or (digest_msg_id and rt == digest_msg_id):
+            out.append(r)
+    return out
+
+
 def ingest_replies(store, batch, replies, source: str = "telegram", *, classify=None) -> int:
     """Ingest a list of messaging Reply dicts as feedback for `batch`."""
     if not replies:

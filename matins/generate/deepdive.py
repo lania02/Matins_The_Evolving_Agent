@@ -18,7 +18,13 @@ from ..providers.search_web import ArxivSearchProvider, get_web_searcher
 from ..store.db import Store
 from ..store.models import Idea
 from .schema import strip_code_fences
-from .slots import load_prompt, output_language_instruction, render_template
+from .slots import (
+    defang_untrusted,
+    fence_untrusted,
+    load_prompt,
+    output_language_instruction,
+    render_template,
+)
 
 
 def _format_idea(idea: Idea) -> str:
@@ -99,11 +105,15 @@ def gather_sources(searchers, queries, k: int, max_sources: int = 10) -> list[di
 
 def _format_sources(sources: list[dict]) -> str:
     if not sources:
-        return "(no sources found)"
+        return fence_untrusted("(no sources found)")
     lines = []
     for i, s in enumerate(sources, start=1):
-        lines.append(f"[{i}] ({s['via']}) {s['title']} — {s['url']}\n    {s['snippet']}")
-    return "\n".join(lines)
+        via = (s.get("via") or "").strip()                       # our own label -> trusted
+        title = defang_untrusted((s.get("title") or "").strip())
+        url = defang_untrusted((s.get("url") or "").strip())
+        snippet = defang_untrusted((s.get("snippet") or "").strip())
+        lines.append(f"[{i}] ({via}) {title} — {url}\n    {snippet}")
+    return fence_untrusted("\n".join(lines))
 
 
 def synthesize_brief(llm, idea: Idea, sources, prompts_dir, output_language: str) -> str:
