@@ -64,6 +64,91 @@ def _too_similar(title: str, siblings: list, *, threshold: float = 0.8) -> bool:
     return False
 
 
+def _behavior_cell(behavior: str) -> tuple[str, str]:
+    """Parse a '<domain> . <method>' behavior tag into normalized (domain, method).
+
+    Every idea already emits this 2-4 word tag for the diversity archive (slots.py), so it
+    is a free, slightly-semantic dedup key -- cheaper and less brittle than title text.
+    Returns ("", "") when there's nothing usable, so the caller falls back to the title
+    backstop instead of treating an absent tag as a match.
+    """
+    b = (behavior or "").strip().lower()
+    if not b:
+        return ("", "")
+    parts = re.split(r"\s*[.·]\s*", b, maxsplit=1)      # the schema's ' . ' (or '·') separator
+    domain = parts[0].strip()
+    method = parts[1].strip() if len(parts) > 1 else ""
+    return (domain, method)
+
+
+def _component_match(a: str, b: str, *, threshold: float = 0.6) -> bool:
+    """True if two behavior-cell components (a domain, or a method) are the same 'cell'.
+
+    Token overlap (CJK chars + English words >2) so minor rephrasings of the SAME topic
+    still collide ('protein folding' vs 'protein structure folding'); it deliberately does
+    NOT catch synonyms in different words ('protein science' vs 'structural biology') -- that
+    is semantic dedup, the job of the deferred embedding upgrade (A3), not this cheap gate.
+    """
+    ta, tb = _title_tokens(a), _title_tokens(b)
+    if not ta or not tb:                                # tokenless (e.g. very short) -> exact
+        return bool(a.strip()) and a.strip() == b.strip()
+    return len(ta & tb) / max(len(ta), len(tb)) >= threshold
+
+
+# Slots whose whole value is the fusion of two poles -- they must articulate the bridge.
+# High-fit is exploit (aim at the core), so it is not depth-gated.
+_FUSION_SLOTS = ("adjacent", "orthogonal", "random")
+
+
+def _bridge_too_shallow(bridge: str, behavior: str, *, min_chars: int = 50) -> bool:
+    """True if the `bridge` field is a stub: too short, or it fails to NAME both poles of
+    the collision (the domain AND the method of the idea's own behavior cell).
+
+    The free, deterministic depth backstop (A+B), the analogue of `_too_similar`: it cannot
+    judge how *deep* the structural correspondence is -- that is the deferred LLM critic
+    (tier C) -- only that the model wrote a two-sided connection instead of a one-line
+    restatement. Degrades to a length-only check when the behavior tag is missing.
+    """
+    b = (bridge or "").strip()
+    if len(b) < min_chars:
+        return True
+    dom, meth = _behavior_cell(behavior)
+    btoks = _title_tokens(b)
+
+    def names(component: str) -> bool:
+        ctoks = _title_tokens(component)
+        return (not ctoks) or bool(ctoks & btoks)   # nothing to require -> satisfied
+
+    return not (names(dom) and names(meth))
+
+
+def _behavior_conflict(slot: str, behavior: str, siblings: list) -> bool:
+    """True if this idea's behavior cell collides with an earlier sibling's, under the
+    slot's own distinctness rule (A2: semantic 'placeholder cell' dedup).
+
+    Per-slot strictness mirrors each slot's design intent:
+      - adjacent: a near-core extension MAY keep a taken domain, but then it must change the
+        METHOD (and vice versa); only a same-domain AND same-method cell -- a collapsed
+        restatement of high-fit -- is rejected.
+      - orthogonal / random: must land in a fresh DOMAIN, so any shared domain is rejected
+        (random simply resamples its genes on the next attempt).
+    Returns False on an empty/unparseable tag so the title-overlap backstop still applies.
+    """
+    dom, meth = _behavior_cell(behavior)
+    if not dom:
+        return False
+    for s in siblings:
+        s_dom, s_meth = _behavior_cell(s.get("behavior", ""))
+        if not s_dom:
+            continue
+        if slot == "adjacent":
+            if _component_match(dom, s_dom) and _component_match(meth, s_meth):
+                return True
+        elif _component_match(dom, s_dom):             # orthogonal, random: new domain required
+            return True
+    return False
+
+
 def _read_interest_seed(cfg: Config) -> str:
     path = cfg.interest_seed_path()
     if path.exists():
@@ -300,6 +385,7 @@ def run_batch(
                 "interest_seed": interest_seed,
                 "recent_ideas": recent_ideas + siblings,
                 "archive": revival,
+                "occupied": siblings,   # B2: 'domain . method' cells already taken THIS batch
             }
             prompt = build_generation_prompt(
                 slot, context, prompts_dir, cfg.generation.output_language, genes_try
@@ -313,7 +399,20 @@ def run_batch(
             parsed, used_genes = candidate, genes_try        # remember the latest good parse
             # Within-batch distinctness: for non-high-fit slots reject a near-duplicate of a
             # sibling and retry (high-fit SHOULD aim at the core). Keep the last try as fallback.
-            if slot != "highfit" and not last and _too_similar(candidate.get("title", ""), siblings):
+            # A2 behavior-cell dedup (semantic 'placeholder cell') is the primary check; the
+            # title-token overlap stays as a backstop for when the behavior tag is missing.
+            if slot != "highfit" and not last and (
+                _behavior_conflict(slot, candidate.get("behavior", ""), siblings)
+                or _too_similar(candidate.get("title", ""), siblings)
+            ):
+                continue
+            # Bridge depth (A+B): the fusion slots must SHOW why the two colliding poles
+            # actually connect (the explicit correspondence the user prizes), not restate the
+            # title. Reject a stub bridge and retry; this free check runs before the API-cost
+            # saturation gate, and the last attempt is kept (never drop below n_slots).
+            if slot in _FUSION_SLOTS and not last and _bridge_too_shallow(
+                candidate.get("bridge", ""), candidate.get("behavior", "")
+            ):
                 continue
             # Anti-red-ocean saturation gate (B2 literature density -> B1 grounded judge):
             # orthogonal only, only with a live search to ground it. Regenerate a saturated,
@@ -339,6 +438,7 @@ def run_batch(
             slot=slot,
             idx=len(ideas) + 1,
             title=parsed["title"],
+            bridge=parsed.get("bridge", ""),
             mechanism=parsed["mechanism"],
             why_now=parsed["why_now"],
             math_structure=parsed["math_structure"],
@@ -350,7 +450,9 @@ def run_batch(
             created_at=now_iso(),
         )
         ideas.append(idea)
-        siblings.append({"date": date, "slot": slot, "title": idea.title})
+        siblings.append(
+            {"date": date, "slot": slot, "title": idea.title, "behavior": idea.behavior}
+        )
 
     if not ideas:
         raise RuntimeError(

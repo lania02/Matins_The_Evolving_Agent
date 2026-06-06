@@ -15,6 +15,9 @@ Guidance for this slot:
   constraint simultaneously. If the combination is awkward, that tension is the creative
   material -- resolve it, do not discard a gene.
 - Record the genes' influence in math_structure and mechanism where natural.
+- The "bridge" field must RECONCILE the genes: name the domain and the method, show the
+  structural correspondence that fuses them under the given constraint, and why that forced
+  pairing is generative rather than arbitrary. The friction between the genes IS the content.
 - You MAY glance at the context below only to keep the idea intelligible to this user,
   but do NOT optimize for their taste here.
 - Leave math_structure empty ("") only if the idea genuinely has no mathematical core.

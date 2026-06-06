@@ -57,7 +57,12 @@ def _idea_schema_instruction() -> str:
         "Use \"\" for math_structure if the idea has no real mathematical content "
         "(an empty value is itself a signal). Make \"behavior\" a terse 2-4 word "
         "\"domain . method\" tag (e.g. \"causal inference . optimal transport\") used "
-        "only to index idea diversity, not prose. Do not include prior_art."
+        "only to index idea diversity, not prose. Write \"bridge\" as the heart of the "
+        "idea -- a real paragraph, not a restatement of the title: name the TWO things you "
+        "are colliding (the specific problem/domain AND the specific method/object), state "
+        "the structural correspondence between them (what maps to what), say why that "
+        "correspondence is non-obvious, and what the pairing unlocks that neither side has "
+        "alone. Do not include prior_art."
     )
 
 
@@ -118,6 +123,16 @@ def _format_archive(archive: list[dict], *, limit: int = 6) -> str:
     return "\n".join(lines)
 
 
+def _format_occupied_cells(occupied: list[dict]) -> str:
+    """Render the 'domain . method' behavior cells already taken by EARLIER ideas in this
+    same batch, so a later slot is told which cells are off-limits today (B2: occupied-cell
+    hard prohibition, the prompt-side companion to the code-level behavior dedup)."""
+    cells = [f"- {beh}" for o in occupied if (beh := (o.get("behavior") or "").strip())]
+    if not cells:
+        return "(none yet -- this is the first idea of today's batch)"
+    return "\n".join(cells)
+
+
 def _format_recent_ideas(recent: list[dict], *, limit: int = 40) -> str:
     """Render recently-proposed ideas (one per line) for the anti-repetition block."""
     if not recent:
@@ -142,6 +157,7 @@ def build_generation_prompt(
 
     `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed,
     recent_ideas (list of {date, slot, title} dicts for the anti-repetition block),
+    occupied (this batch's earlier ideas, carrying behavior, for the taken-cells block),
     archive (list of dormant well-liked elites for the slot-B revival block).
     `genes` is the sampled (domain, method, constraint) triple for slot=random.
     """
@@ -159,6 +175,7 @@ def build_generation_prompt(
         "FAST_MEMORY": context.get("fast_memory") or "(no recent feedback yet)",
         "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
         "RECENT_IDEAS": _format_recent_ideas(context.get("recent_ideas") or []),
+        "OCCUPIED_CELLS": _format_occupied_cells(context.get("occupied") or []),
         "ARCHIVE": _format_archive(context.get("archive") or []),
         "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
         "IDEA_SCHEMA": _idea_schema_instruction(),

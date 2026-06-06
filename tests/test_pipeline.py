@@ -220,6 +220,193 @@ def _idea_json(t):
             '"tractability": "t", "fit_to_program": "f"}')
 
 
+def _idea_b(title, behavior, bridge=None):
+    """An idea JSON carrying an explicit 'domain . method' behavior tag (A2 dedup key).
+
+    A substantive `bridge` (naming both poles of the cell) is supplied by default so these
+    behavior-dedup tests are not incidentally caught by the bridge-depth gate (B); pass
+    bridge="" to exercise that gate explicitly.
+    """
+    if bridge is None:
+        dom, _, meth = behavior.partition(".")
+        bridge = (f"{dom.strip()} 与 {meth.strip()} 的结构对应：把后者的算子搬到前者的对象上，"
+                  f"二者共享同一不动点结构，这一映射并不显然，却能迁移其收敛性定理。")
+    return ('{"title": "%s", "mechanism": "m", "why_now": "w", "math_structure": "", '
+            '"tractability": "t", "fit_to_program": "f", "behavior": "%s", "bridge": "%s"}'
+            % (title, behavior, bridge))
+
+
+def test_behavior_cell_and_conflict_helpers():
+    # A2 unit: the 'domain . method' tag parses, and the per-slot conflict rule is correct.
+    from matins.generate.pipeline import _behavior_cell, _behavior_conflict
+
+    assert _behavior_cell("Causal Inference . Optimal Transport") == (
+        "causal inference", "optimal transport")
+    assert _behavior_cell("") == ("", "")
+    assert _behavior_cell("solo-domain") == ("solo-domain", "")
+
+    sibs = [{"behavior": "finance . spectral radius"}]
+    # orthogonal: a shared DOMAIN is a conflict no matter the method...
+    assert _behavior_conflict("orthogonal", "finance . auction theory", sibs) is True
+    # ...but a fresh domain passes even when the method coincides.
+    assert _behavior_conflict("orthogonal", "biology . spectral radius", sibs) is False
+    # adjacent: only the FULL cell (same domain AND method) collapses; new method is fine.
+    assert _behavior_conflict("adjacent", "finance . spectral radius", sibs) is True
+    assert _behavior_conflict("adjacent", "finance . optimal transport", sibs) is False
+    # an empty tag never matches -> the title backstop takes over.
+    assert _behavior_conflict("orthogonal", "", sibs) is False
+
+
+def test_orthogonal_rejects_shared_domain_even_with_a_new_title():
+    # A2: the orthogonal slot's first try lands in a domain already used today (finance), but
+    # with a title that does NOT overlap any sibling's -- so the title backstop would miss it.
+    # The behavior-cell check must still reject it and retry into a genuinely new domain.
+    class OrthoSameDomainLLM:
+        def __init__(self):
+            self.ortho = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "HIGH-FIT" in prompt:
+                return _idea_b("Spectral radius market stability", "finance . spectral radius")
+            if "ADJACENT-STRETCH" in prompt:
+                return _idea_b("Population genetics drift", "biology . genetic drift")
+            if "ORTHOGONAL" in prompt:
+                self.ortho += 1
+                return _idea_b("Auction design for spectrum allocation",
+                               "finance . auction theory") if self.ortho == 1 \
+                    else _idea_b("Topology of language change", "linguistics . algebraic topology")
+            if "RANDOM-MUTATION" in prompt:
+                return _idea_b("Random matrix chaos", "physics . random matrix")
+            return _RANKS
+
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), OrthoSameDomainLLM(), None,
+                          date="2026-04-01")
+    ortho = next(i for i in ideas if i.slot == "orthogonal")
+    assert "Topology" in ortho.title            # the same-domain (finance) first try was rejected
+    assert "linguistics" in ortho.behavior
+    assert len(ideas) == 4
+
+
+def test_adjacent_rejects_full_cell_collision_but_keeps_a_new_method():
+    # A2: adjacent's first try copies high-fit's WHOLE cell (same domain AND method) under a
+    # different title -> rejected; the retry keeps the domain but changes the method -> kept.
+    # Proves the slot-graded rule: a near-core extension may stay in-domain if it shifts method.
+    class AdjFullCellLLM:
+        def __init__(self):
+            self.adj = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "HIGH-FIT" in prompt:
+                return _idea_b("Spectral radius market stability", "finance . spectral radius")
+            if "ADJACENT-STRETCH" in prompt:
+                self.adj += 1
+                return _idea_b("Spectral radius for credit networks",
+                               "finance . spectral radius") if self.adj == 1 \
+                    else _idea_b("Optimal transport for market contagion",
+                                 "finance . optimal transport")
+            if "ORTHOGONAL" in prompt:
+                return _idea_b("Topology of language change", "linguistics . topology")
+            if "RANDOM-MUTATION" in prompt:
+                return _idea_b("Random matrix chaos", "physics . random matrix")
+            return _RANKS
+
+    llm = AdjFullCellLLM()
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-04-02")
+    adjacent = next(i for i in ideas if i.slot == "adjacent")
+    assert "Optimal transport" in adjacent.title    # full-cell collision rejected, new method kept
+    assert adjacent.behavior == "finance . optimal transport"  # same domain retained on purpose
+    assert llm.adj == 2                              # exactly one rejection + one accept
+    assert len(ideas) == 4
+
+
+def test_occupied_cells_injected_into_later_slot_prompts():
+    # B2: each later slot is told the 'domain . method' cells already taken THIS batch, as a
+    # hard prohibition -- the prompt-side companion to the code-level behavior dedup.
+    class RecordingLLM:
+        def __init__(self):
+            self.prompts = []
+            self.n = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "single JSON object" in prompt or "RANDOM-MUTATION" in prompt:
+                self.prompts.append(prompt)
+                self.n += 1
+                return _idea_b(f"TITLE{self.n}", f"domain{self.n} . method{self.n}")
+            return _RANKS
+
+    llm = RecordingLLM()
+    run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-04-03")
+    adj_prompt = next(p for p in llm.prompts if "ADJACENT-STRETCH" in p)
+    ortho_prompt = next(p for p in llm.prompts if "ORTHOGONAL" in p)
+    assert "ALREADY TAKEN TODAY" in adj_prompt
+    assert "domain1 . method1" in adj_prompt         # high-fit's cell shown to adjacent
+    assert "domain1 . method1" in ortho_prompt       # ...and to orthogonal
+    assert "domain2 . method2" in ortho_prompt       # along with adjacent's cell
+
+
+def test_bridge_too_shallow_helper():
+    # B unit: the free depth backstop -- long enough AND names both poles, else shallow.
+    from matins.generate.pipeline import _bridge_too_shallow
+
+    deep = ("finance 与 spectral radius 的结构对应：把后者的算子搬到前者的对象上，"
+            "二者共享同一不动点结构，这一映射并不显然，却能迁移其收敛性定理。")
+    assert _bridge_too_shallow(deep, "finance . spectral radius") is False
+    # too short -> shallow regardless of content
+    assert _bridge_too_shallow("把 X 套到 Y 上。", "finance . spectral radius") is True
+    # long but names only ONE pole (no 'spectral radius' tokens) -> shallow
+    assert _bridge_too_shallow("finance " * 20, "finance . spectral radius") is True
+    # missing behavior tag -> degrade to a length-only check (poles vacuously named)
+    assert _bridge_too_shallow(deep, "") is False
+
+
+def test_bridge_persists_through_pipeline_and_store():
+    # A: every idea now carries a 'bridge', and it round-trips through SQLite intact.
+    class BridgeLLM:
+        def __init__(self):
+            self.n = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "single JSON object" in prompt or "RANDOM-MUTATION" in prompt:
+                self.n += 1
+                return _idea_b(f"Idea {self.n}", f"domain{self.n} . method{self.n}")
+            return _RANKS
+
+    store = Store(":memory:")
+    _b, ideas = run_batch(_cfg(), store, BridgeLLM(), None, date="2026-04-11")
+    assert all(i.bridge for i in ideas)                  # every idea carries a bridge
+    assert "结构对应" in ideas[0].bridge
+    reread = store.ideas_for_batch(ideas[0].batch_id)
+    assert reread[0].bridge == ideas[0].bridge           # survives the DB round-trip
+
+
+def test_bridge_gate_regenerates_a_shallow_bridge():
+    # B: a fusion slot whose first try has a stub (empty) bridge is rejected and retried
+    # into one that actually articulates the collision -- the depth analogue of dedup.
+    class ShallowThenDeepLLM:
+        def __init__(self):
+            self.ortho = 0
+
+        def generate(self, prompt, *, temperature, json_schema=None):
+            if "HIGH-FIT" in prompt:
+                return _idea_b("Spectral markets", "finance . spectral radius")
+            if "ADJACENT-STRETCH" in prompt:
+                return _idea_b("Drift genetics", "biology . genetic drift")
+            if "ORTHOGONAL" in prompt:
+                self.ortho += 1
+                return _idea_b("Linguistic topology", "linguistics . topology",
+                               "" if self.ortho == 1 else None)   # stub first, deep on retry
+            if "RANDOM-MUTATION" in prompt:
+                return _idea_b("Random chaos", "physics . random matrix")
+            return _RANKS
+
+    llm = ShallowThenDeepLLM()
+    _b, ideas = run_batch(_cfg(), Store(":memory:"), llm, None, date="2026-04-12")
+    ortho = next(i for i in ideas if i.slot == "orthogonal")
+    assert llm.ortho == 2                                 # the empty-bridge first try was rejected
+    assert "结构对应" in ortho.bridge                     # the substantive bridge was kept
+    assert len(ideas) == 4
+
+
 def test_saturation_gate_regenerates_red_ocean_orthogonal():
     # The orthogonal slot's first try is a saturated "red ocean" idea. The grounded judge
     # (given a high literature count + closest works = B2) returns "regenerate" (B1), so the
@@ -236,8 +423,12 @@ def test_saturation_gate_regenerates_red_ocean_orthogonal():
                 return '{"verdict": "%s", "saturation": "high", "reason": "r"}' % verdict
             if "ORTHOGONAL" in prompt:                         # checked AFTER the judge marker
                 self.ortho_gens += 1
-                return _idea_json("Red ocean GNN protein" if self.ortho_gens == 1
-                                  else "Fresh contrarian angle")
+                # Carry a substantive bridge so the depth gate passes and the saturation
+                # judge (the behaviour under test) is the one that decides regenerate/keep.
+                br = ("把远域的算子搬到本域对象上，二者共享同一不动点结构，这一对应并不显然，"
+                      "却可迁移其收敛性定理，正是本槽要的碰撞点。")
+                return _idea_b("Red ocean GNN protein" if self.ortho_gens == 1
+                               else "Fresh contrarian angle", "", br)
             if "HIGH-FIT" in prompt:
                 return _idea_json("Spectral market stability")
             if "ADJACENT-STRETCH" in prompt:

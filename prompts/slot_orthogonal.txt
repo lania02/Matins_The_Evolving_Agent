@@ -26,6 +26,13 @@ Use this to locate a domain that is genuinely DISTANT from these interests.
 == ALREADY PROPOSED (ideas surfaced in recent days -- avoid repeating these) ==
 {{RECENT_IDEAS}}
 
+== ALREADY TAKEN TODAY ("domain . method" cells used by earlier ideas in THIS batch) ==
+{{OCCUPIED_CELLS}}
+
+HARD CONSTRAINT (today's cells): your "behavior" tag's DOMAIN must be different from every
+domain listed directly above. Landing in a domain another slot already used today is not
+orthogonal, even with a different method -- pick a domain none of today's ideas have touched.
+
 HARD CONSTRAINT: your contrarian idea must also be distinct from every entry listed
 above -- do not recycle a previous day's contrarian move. In particular, if TODAY's
 other ideas above already lean on a specific method or mathematical object (e.g. a
@@ -47,6 +54,9 @@ Guidance for this slot:
 - Make the contrarian move principled: why might the user be wrong, or why might the
   distant domain reward them anyway? Put that argument in why_now and fit_to_program.
 - Do not soften it back toward fit. The point is a clean test of the boundary.
+- The "bridge" field must JUSTIFY the collision: name the defied preference (or home domain)
+  and the contrarian move (or distant domain), then give the principled structural reason the
+  pairing could win anyway -- the non-obvious correspondence between them, not a restatement.
 - Leave math_structure empty ("") only if the idea genuinely has no mathematical core.
 
 == OUTPUT FORMAT ==

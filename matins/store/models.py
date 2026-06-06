@@ -40,6 +40,7 @@ class Idea:
     slot: str
     idx: int
     title: str = ""
+    bridge: str = ""                   # the collision: explicit structural correspondence of the two fused poles
     mechanism: str = ""
     why_now: str = ""
     math_structure: str = ""

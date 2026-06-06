@@ -21,6 +21,16 @@ Produce exactly ONE idea, as a single JSON object. It must be concrete and actio
 == ALREADY PROPOSED (ideas surfaced in recent days -- avoid repeating these) ==
 {{RECENT_IDEAS}}
 
+== ALREADY TAKEN TODAY ("domain . method" cells used by earlier ideas in THIS batch) ==
+{{OCCUPIED_CELLS}}
+
+HARD CONSTRAINT (today's cells): the "domain . method" cells listed directly above are
+already taken by today's other ideas. You MAY stay inside one of those domains -- this is
+the adjacent slot -- but then you MUST change the method (or stay with a method but change
+the domain). A new idea that reuses BOTH the same domain AND the same method as a taken
+cell is a collapsed restatement and will be rejected. State your own "behavior" tag so the
+stretched dimension is explicit.
+
 == WORTH REVISITING (directions the user liked before but we have drifted away from) ==
 {{ARCHIVE}}
 
@@ -41,6 +51,9 @@ Guidance for this slot:
   the stretch is isolated and the user's reaction is interpretable.
 - Name the stretched dimension implicitly through why_now and fit_to_program; do not
   abandon fit entirely, just extend it.
+- The "bridge" field is the crux of this slot: name the high-fit core and the ONE dimension
+  you stretched, then explain the structural correspondence that keeps them coherent and
+  what the stretch newly exposes -- the real connection, not merely "I changed the method".
 - Leave math_structure empty ("") only if the idea genuinely has no mathematical core.
 
 == OUTPUT FORMAT ==

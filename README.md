@@ -10,8 +10,6 @@ The product is not the daily ideas alone — it is the **append-only log of
 makes both you and the system better. See [`DESIGN.md`](DESIGN.md) for the full
 engineering rationale.
 
-*(Project codename was "Mendel"; renamed to **Matins** — the pre-dawn canonical hour.)*
-
 ---
 
 ## How it works (one screen)
@@ -29,8 +27,18 @@ weekly matins consolidate propose a taste-skill update → you approve → versi
   generated earlier in the same batch* — are fed back into the prompts with a hard
   "must be distinct" constraint, so the slots never re-surface near-duplicates of last
   week's ideas nor collapse onto each other (the adjacent slot can't restate high-fit).
-  Each slot also retries (resampling the random slot's genes) so you reliably get all
-  four ideas, not three.
+  Within a batch, distinctness is enforced **semantically, not by title text**: every idea
+  carries a terse `domain · method` cell, the cells already taken today are injected into each
+  later slot's prompt as off-limits, and a code-level check regenerates a slot that lands on a
+  taken cell — graded per slot (orthogonal must move to a new *domain*; adjacent may stay in a
+  domain only if it changes the *method*). Each slot also retries (resampling the random
+  slot's genes) so you reliably get all four ideas, not three.
+- **Every idea leads with its "bridge".** Colliding two viewpoints is wasted if the write-up
+  only says "apply X to Y". So each idea must state, up front, the explicit structural
+  correspondence between the two poles it fuses — what maps to what, why it is non-obvious,
+  and what the pairing unlocks that neither side has alone (the kind of explicit isomorphism
+  this loop is built to reward). A free depth check regenerates a fusion slot whose bridge is
+  a stub rather than a real connection.
 - **Anti-red-ocean gate (optional).** A contrarian "jump to a distant domain" tends to land
   on that domain's most *famous* topic — a saturated red ocean (e.g. GNNs for protein folding)
   that inspires no one. When enabled, a gated slot's candidate is grounded in **real

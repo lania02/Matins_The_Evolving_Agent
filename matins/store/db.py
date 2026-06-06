@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   slot            TEXT,
   idx             INTEGER,
   title           TEXT,
+  bridge          TEXT DEFAULT '',       -- the collision: structural correspondence of the two fused poles
   mechanism       TEXT,
   why_now         TEXT,
   math_structure  TEXT,
@@ -138,6 +139,7 @@ class Store:
         # here. Safe on a fresh DB (the column is already in SCHEMA) and on an old one.
         self._ensure_column("feedback", "comment_kind", "TEXT DEFAULT ''")
         self._ensure_column("ideas", "behavior", "TEXT DEFAULT ''")
+        self._ensure_column("ideas", "bridge", "TEXT DEFAULT ''")
         self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -194,11 +196,11 @@ class Store:
     # ---- ideas -----------------------------------------------------------
     def insert_idea(self, idea: Idea) -> None:
         self.conn.execute(
-            """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, mechanism,
+            """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, bridge, mechanism,
                why_now, math_structure, prior_art, tractability, fit_to_program,
                behavior, random_genes, self_rank, self_rationale, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title,
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title, idea.bridge,
              idea.mechanism, idea.why_now, idea.math_structure, idea.prior_art,
              idea.tractability, idea.fit_to_program, idea.behavior, idea.random_genes,
              idea.self_rank, idea.self_rationale, idea.created_at or now_iso()),

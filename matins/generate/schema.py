@@ -13,6 +13,7 @@ import re
 # generation and filled by the novelty check (section 7).
 IDEA_FIELDS = [
     "title",
+    "bridge",           # the collision: the explicit structural correspondence between the two fused poles
     "mechanism",
     "why_now",
     "math_structure",   # empty if none -- itself a signal

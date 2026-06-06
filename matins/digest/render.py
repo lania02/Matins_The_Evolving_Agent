@@ -50,6 +50,7 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
             if value:
                 lines.append(f"{field_label}: {value}")
 
+        add("Bridge", idea.bridge)                   # the collision, shown first as the headline
         add("Mechanism", idea.mechanism)
         add("Why now", idea.why_now)
         add("Math structure", idea.math_structure)  # skipped when empty
@@ -121,6 +122,7 @@ def render_overview(store, batches, *, db_path: str | None = None) -> str:
             badge = " · 🔬 deep-dived" if store.get_deep_dive(idea.idea_id) else ""
             out.append(f"### #{idea.idx} [{label}] {idea.title}{badge}")
             for field_label, value in (
+                ("Bridge", idea.bridge),
                 ("Mechanism", idea.mechanism),
                 ("Why now", idea.why_now),
                 ("Math structure", idea.math_structure),
@@ -162,6 +164,7 @@ def render_favorites_md(favorites) -> str:
             out.append(f"> {note}")
         out.append("")
         for field_label, value in (
+            ("Bridge", idea.bridge),
             ("Mechanism", idea.mechanism),
             ("Why now", idea.why_now),
             ("Math structure", idea.math_structure),

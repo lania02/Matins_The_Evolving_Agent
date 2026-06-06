@@ -33,6 +33,9 @@ Guidance for this slot:
   step"), satisfy it directly.
 - Stay inside the user's interest areas and preferred problem types.
 - The why_now field should connect to the fresh retrieval when relevant.
+- The "bridge" field is where this idea earns its place: make the core insight explicit --
+  ideally the precise structural correspondence or isomorphism that makes it click (this
+  user prizes an explicit isomorphism). Do not leave it as a shallow one-liner.
 - Leave math_structure empty ("") only if the idea genuinely has no mathematical core.
 
 == OUTPUT FORMAT ==
