@@ -6,7 +6,7 @@ with sensible defaults, so the rest of the code never touches raw dict access.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import yaml
@@ -99,6 +99,14 @@ class RetrievalCfg:
 @dataclass
 class DeepDiveCfg:
     model: str = "gemini-3.5-flash"      # stronger model for on-demand briefings; "" = provider.model
+    # OPTIONAL standalone provider for the deep dive ONLY. Leave provider_name="" (the
+    # default) to run dig on the main provider + `model` above -- the original behavior.
+    # Set provider_name + base_url + api_key_env to route ONLY the dig briefing to a
+    # different vendor (e.g. agnes) without touching daily generation; `model` is then the
+    # model id on THAT provider. Blanking provider_name reverts cleanly.
+    provider_name: str = ""              # "" = inherit main provider; else anthropic | openai | openai_compatible
+    base_url: str | None = None          # override endpoint (required for openai_compatible)
+    api_key_env: str = ""                # env var holding the override provider's key ("" = reuse main)
     web_search: str = "tavily"           # tavily | none
     web_api_key_env: str = "TAVILY_API_KEY"
     k_per_query: int = 5
@@ -180,6 +188,25 @@ class Config:
     def dig_model(self) -> str:
         """Model for on-demand deep dives (falls back to the main provider model)."""
         return self.deep_dive.model or self.provider.model
+
+    def dig_provider(self) -> ProviderCfg:
+        """Resolve the provider the deep dive runs on.
+
+        When deep_dive.provider_name is set, the dig uses that STANDALONE provider
+        (its own base_url / api_key_env / model) -- letting briefings run on a
+        different vendor than daily generation. Otherwise it inherits the main
+        provider with dig_model(), i.e. the original behavior. Reverting is as
+        simple as blanking deep_dive.provider_name.
+        """
+        dd = self.deep_dive
+        if dd.provider_name:
+            return ProviderCfg(
+                name=dd.provider_name,
+                model=dd.model or self.provider.model,
+                base_url=dd.base_url,
+                api_key_env=dd.api_key_env or self.provider.api_key_env,
+            )
+        return replace(self.provider, model=self.dig_model())
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:

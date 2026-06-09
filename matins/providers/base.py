@@ -54,6 +54,17 @@ def get_llm_provider(cfg: Config, model: str | None = None) -> LLMProvider:
     raise ValueError(f"unknown LLM provider: {name!r}")
 
 
+def get_dig_llm_provider(cfg: Config) -> LLMProvider:
+    """LLM adapter for the on-demand deep dive.
+
+    Uses deep_dive's standalone provider override (cfg.dig_provider()) when one is
+    configured -- so briefings can run on a different vendor than daily generation --
+    and otherwise falls back to the main provider with dig_model(). Either way,
+    generation/consolidation keep using cfg.provider untouched.
+    """
+    return get_llm_provider(dataclasses.replace(cfg, provider=cfg.dig_provider()))
+
+
 def get_search_provider(cfg: Config) -> SearchProvider | None:
     """Instantiate the configured search adapter, or None when disabled.
 

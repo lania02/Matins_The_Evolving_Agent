@@ -72,6 +72,12 @@ retrieval:
 
 deep_dive:                   # on-demand `dig #N` grounded briefings
   model: ""   # stronger model for synthesis; "" = use provider.model
+  # OPTIONAL: route ONLY the dig onto a different vendor (e.g. agnes), leaving daily
+  # generation on the main provider above. Uncomment the three lines + set `model` to that
+  # vendor's model id. Re-comment them (provider_name back to "") to revert.
+  # provider_name: openai_compatible          # agnes & most gateways are OpenAI-compatible
+  # base_url: https://apihub.agnes-ai.com/v1  # the override endpoint
+  # api_key_env: AGNES_API_KEY                # env var (in .env) holding that key
   web_search: tavily         # tavily | none
   web_api_key_env: TAVILY_API_KEY
   k_per_query: 5             # results requested per query, per searcher

@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 from ..config import Config
-from ..providers.base import get_llm_provider
+from ..providers.base import get_dig_llm_provider
 from ..providers.search_web import ArxivSearchProvider, get_web_searcher
 from ..store.db import Store
 from ..store.models import Idea
@@ -130,7 +130,7 @@ def synthesize_brief(llm, idea: Idea, sources, prompts_dir, output_language: str
 
 def run_deep_dive(cfg: Config, store: Store, idea: Idea) -> dict:
     """Full deep dive for one idea; persists to the store and returns the result."""
-    llm = get_llm_provider(cfg, model=cfg.dig_model())
+    llm = get_dig_llm_provider(cfg)
     prompts_dir = cfg.prompts_dir()
 
     searchers = [(ArxivSearchProvider(), "arxiv")]

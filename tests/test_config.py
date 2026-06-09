@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from matins.config import load_config, load_dotenv
+from matins.config import Config, DeepDiveCfg, ProviderCfg, load_config, load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,3 +55,39 @@ def test_default_kernels_keep_the_whole_window() -> None:
     cfg = load_config(REPO_ROOT / "does_not_exist.yaml")   # code defaults
     assert cfg.fast_kernel is not None and cfg.fast_kernel.stride == 1
     assert cfg.slow_kernel is not None and cfg.slow_kernel.stride == 1
+
+
+def _provider_pair() -> Config:
+    return Config(
+        provider=ProviderCfg(name="openai_compatible", model="main-model",
+                             base_url="https://main/v1", api_key_env="MAIN_KEY"),
+        deep_dive=DeepDiveCfg(model="", provider_name="",
+                              base_url="https://apihub.agnes-ai.com/v1",
+                              api_key_env="AGNES_API_KEY"),
+    )
+
+
+def test_dig_provider_inherits_main_when_override_absent() -> None:
+    # Default: no deep_dive.provider_name -> the dig runs on the MAIN provider (only the
+    # model may differ). This is the original behavior; it must be preserved so a user can
+    # revert simply by blanking provider_name (base_url/api_key_env below are ignored).
+    cfg = _provider_pair()                                  # provider_name == ""
+    dp = cfg.dig_provider()
+    assert dp.name == "openai_compatible"
+    assert dp.base_url == "https://main/v1"                 # NOT the agnes base_url
+    assert dp.api_key_env == "MAIN_KEY"
+    assert dp.model == "main-model"                         # empty dig model -> provider.model
+
+
+def test_dig_provider_uses_standalone_override_without_touching_main() -> None:
+    # Setting provider_name routes ONLY the dig to a separate vendor (agnes); the main
+    # provider that daily generation uses is left completely untouched.
+    cfg = _provider_pair()
+    cfg.deep_dive.provider_name = "openai_compatible"
+    cfg.deep_dive.model = "agnes-2.0-flash"
+    dp = cfg.dig_provider()
+    assert dp.base_url == "https://apihub.agnes-ai.com/v1"
+    assert dp.api_key_env == "AGNES_API_KEY"
+    assert dp.model == "agnes-2.0-flash"
+    assert cfg.provider.base_url == "https://main/v1"       # main provider unchanged
+    assert cfg.provider.model == "main-model"
