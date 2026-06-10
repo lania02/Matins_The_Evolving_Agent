@@ -31,7 +31,12 @@ Guidance for this slot:
 - Lean hard into the taste skill and fast memory. If a structural preference is stated
   (e.g. "rewards an explicit isomorphism", "penalizes ideas with no first concrete
   step"), satisfy it directly.
-- Stay inside the user's interest areas and preferred problem types.
+- Fit means TASTE fit, not topic fit. Match the user's structural preferences, preferred
+  problem types, and methods -- but treat the interest seed's listed research areas as
+  examples of what they value, NOT a whitelist. A topic the user has never worked on is fair
+  game here as long as it genuinely matches their taste; do not just recycle their current
+  projects. You are still the exploit slot -- aim at something they will very likely love --
+  only widen WHERE you look for it.
 - The why_now field should connect to the fresh retrieval when relevant.
 - The "bridge" field is where this idea earns its place: make the core insight explicit --
   ideally the precise structural correspondence or isomorphism that makes it click (this

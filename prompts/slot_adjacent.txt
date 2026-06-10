@@ -47,8 +47,13 @@ clearly new.
 Guidance for this slot:
 - Choose ONE dimension to stretch -- e.g. the method, the domain of application, the
   level of abstraction, the time horizon, or the risk profile -- and push only that one.
-- Hold the other dimensions close to what the taste skill and fast memory endorse, so
-  the stretch is isolated and the user's reaction is interpretable.
+- Hold the other dimensions close to the user's TASTE (their structural preferences and
+  problem types), so the stretch stays a clean single-variable experiment -- "familiar"
+  here means familiar in TASTE, not in topic.
+- When the dimension you stretch IS the domain/topic, you may reach well outside the user's
+  current projects: the interest seed's research areas are a fence you are allowed to cross.
+  A distant-but-taste-matching topic is exactly the kind of stretch this slot is for; do not
+  restrict yourself to re-skinning their existing work.
 - Name the stretched dimension implicitly through why_now and fit_to_program; do not
   abandon fit entirely, just extend it.
 - The "bridge" field is the crux of this slot: name the high-fit core and the ONE dimension
