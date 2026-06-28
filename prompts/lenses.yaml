@@ -1,0 +1,111 @@
+# Grounding lenses (Idea Oracle port).
+#
+# A small, HUMAN-CURATED pool of REAL external vantages the generator can be forced to
+# serve, so ideas stop floating in abstract method-space. Two kinds:
+#   occupation -- a real profession + real, task-level frictions (O*NET-style). Used by
+#                 lens_mode: product (and mixed). These ground "buildable / weekend-demo" ideas.
+#   research   -- a real domain/phenomenon + real data + genuine open questions. Used by
+#                 lens_mode: research (and mixed). These ground "research-idea" ideas.
+#
+# DISCIPLINE: keep these REAL and task-level. The whole value is that the vantage is not an
+# LLM hallucination ("doctors are busy"); replace/extend with entries pulled from O*NET
+# (https://www.onetonline.org) and real datasets for your fields. `name` is the short tag
+# recorded on each idea (the "vantage") and used to avoid reusing a lens day to day.
+
+occupation:
+  - name: Radiologist
+    tasks:
+      - interpret CT / MRI / X-ray studies and dictate structured reports
+      - flag urgent findings and compare a study against the patient's priors
+    frictions:
+      - a high volume of normal studies inflates read time
+      - subtle findings are missed under fatigue late in a shift
+      - report structure is inconsistent across readers
+    would_pay_for:
+      - fast normal-vs-abnormal triage
+      - automatic comparison against prior studies
+
+  - name: Paralegal
+    tasks:
+      - review discovery document sets and cite-check briefs
+      - track deadlines across matters and draft routine filings
+    frictions:
+      - manual privilege / relevance review of huge document sets
+      - broken or outdated citations slip through
+      - deadlines buried in court orders are easy to miss
+    would_pay_for:
+      - privilege / relevance triage of a document dump
+      - citation verification and deadline extraction from orders
+
+  - name: Logistics dispatcher
+    tasks:
+      - assign loads to drivers and reroute around disruptions
+      - keep drivers within hours-of-service rules and update customer ETAs
+    frictions:
+      - replanning the board when a driver or road fails is slow and manual
+      - juggling hours-of-service compliance against on-time delivery
+      - ETA updates to customers are sent by hand
+    would_pay_for:
+      - dynamic, HOS-aware re-routing and load assignment
+      - automatic ETA communication
+
+  - name: Wet-lab biologist
+    tasks:
+      - run bench protocols and record results in a lab notebook
+      - troubleshoot failed experiments and find method papers
+    frictions:
+      - reproducing a finicky protocol from a terse methods section
+      - notebook capture is messy and hard to search later
+      - root-causing why a run failed is trial-and-error
+    would_pay_for:
+      - protocol troubleshooting grounded in the actual steps
+      - structured, searchable notebook capture
+
+research:
+  - name: Urban mobility & transit demand
+    phenomena:
+      - congestion cascades and transfer-hub bottlenecks
+      - modal shift under congestion / fare pricing
+    data:
+      - GTFS feeds, smartcard tap logs, bike-share trip dumps, OSM road graphs
+    open_questions:
+      - how does a fare or pricing change ripple through transfer hubs?
+      - can a demand spike be predicted from upstream tap counts?
+
+  - name: Online opinion dynamics & platforms
+    phenomena:
+      - polarization, community fracture, and viral cascades
+      - bot-driven amplification of fringe content
+    data:
+      - public social graphs, Reddit / Wikipedia edit histories, fact-check corpora
+    open_questions:
+      - when does a recommendation tweak flip a community from consensus to fracture?
+      - what early structural signal precedes a cascade?
+
+  - name: Energy grid & demand response
+    phenomena:
+      - load balancing under renewable intermittency and cascading outages
+      - price spikes in wholesale electricity markets
+    data:
+      - ISO load / price time series, weather feeds, EV charging logs
+    open_questions:
+      - how far ahead can a local outage cascade be detected?
+      - can flexible demand damp a volatile price without central control?
+
+  - name: Public-health surveillance
+    phenomena:
+      - outbreak spread, intervention timing, and reporting-delay bias
+    data:
+      - case time series, mobility indices, wastewater signals, search-trend feeds
+    open_questions:
+      - how much does reporting delay bias a real-time Rt estimate?
+      - can a wastewater signal reliably lead clinical case counts?
+
+  - name: Peer review & metascience
+    phenomena:
+      - reviewer disagreement, citation dynamics, and replication failure
+    data:
+      - the OpenAlex citation graph, open-review texts, retraction databases
+    open_questions:
+      - what features of a review text predict later replication?
+      - does reviewer disagreement forecast eventual impact?

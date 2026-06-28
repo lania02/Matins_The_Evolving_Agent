@@ -48,6 +48,8 @@ class Idea:
     tractability: str = ""
     fit_to_program: str = ""
     behavior: str = ""                 # 2-4 word "domain . method" tag; behavior coord for the archive
+    lens: str = ""                     # the grounding vantage this idea served (profession / research domain)
+    verdicts: str = ""                 # JSON {axis: {score, confidence, evidence, action, note}} from the verifier panel
     random_genes: str = ""
     self_rank: int | None = None
     self_rationale: str = ""

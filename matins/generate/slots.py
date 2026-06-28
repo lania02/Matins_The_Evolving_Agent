@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from ..store.models import Idea
+from .lens import render_lens_block
 from .schema import IDEA_FIELDS
 
 SLOT_PROMPT_FILES = {
@@ -164,6 +165,7 @@ def build_generation_prompt(
     `context` keys: skill, fast_memory, retrieval (list of dicts), interest_seed,
     recent_ideas (list of {date, slot, title} dicts for the anti-repetition block),
     occupied (this batch's earlier ideas, carrying behavior, for the taken-cells block),
+    lens (an optional Lens to ground this slot in a real external vantage, or None),
     archive (list of dormant well-liked elites for the slot-B revival block).
     `genes` is the sampled (domain, method, constraint) triple for slot=random.
     """
@@ -182,6 +184,7 @@ def build_generation_prompt(
         "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
         "RECENT_IDEAS": _format_recent_ideas(context.get("recent_ideas") or []),
         "OCCUPIED_CELLS": _format_occupied_cells(context.get("occupied") or []),
+        "LENS": render_lens_block(context.get("lens")),
         "ARCHIVE": _format_archive(context.get("archive") or []),
         "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
         "IDEA_SCHEMA": _idea_schema_instruction(),

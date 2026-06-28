@@ -42,6 +42,8 @@ in a new subsystem is NOT orthogonal -- it is the failure this slot exists to pr
 If it overlaps, defy a different preference or jump to a different distant domain until
 it is clearly new.
 
+{{LENS}}
+
 Guidance for this slot:
 - AVOID RED OCEANS. Distant does not mean famous. The trap to avoid is reaching for a far
   domain's most well-known headline topic -- a textbook "popular-method x popular-problem"

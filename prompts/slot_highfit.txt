@@ -27,6 +27,8 @@ Do not restate, rename, or lightly re-skin any of them. If your first instinct o
 with one, change its core mechanism, target system, or mathematical object until it is
 clearly new.
 
+{{LENS}}
+
 Guidance for this slot:
 - Lean hard into the taste skill and fast memory. If a structural preference is stated
   (e.g. "rewards an explicit isomorphism", "penalizes ideas with no first concrete

@@ -25,6 +25,15 @@ class GenerationCfg:
     n_slots: int = 4
     temperature: float = 0.4         # 0..1 explore aggressiveness
     output_language: str = "bilingual"  # en | zh | bilingual
+    # Grounding lens (Idea Oracle port): inject a REAL external vantage into generation so
+    # ideas serve a concrete need instead of floating in abstract method-space. Modes:
+    #   off (default) | research (research vantages only) | product (occupation / O*NET-style
+    #   vantages, weekend-demo framing) | mixed (both). The pool lives in prompts/lenses.yaml;
+    #   fail-open (no file -> no lens -> unchanged generation).
+    lens_mode: str = "off"
+    # Which slots receive a grounding vantage. random is excluded by design (pure
+    # perturbation); default the two explore-ish slots that tend to float abstract.
+    lens_slots: list[str] = field(default_factory=lambda: ["adjacent", "orthogonal"])
 
 
 @dataclass
@@ -44,6 +53,18 @@ class NoveltyCfg:
     #     gating them fights their purpose and just costs API calls.
     # Empty list = gate off. Inactive offline anyway (no search provider wired).
     saturation_gate_slots: list[str] = field(default_factory=lambda: ["orthogonal"])
+
+
+@dataclass
+class VerifyCfg:
+    # Verifier panel (MATINS_UPGRADE_PLAN phases A+B): externally-anchored, per-axis verdicts
+    # attached to each idea after generation. axes=[] (default) keeps the legacy single novelty
+    # note; ["unique","useful"] turns on the calibrated panel. Advisory in A/B (recorded, not
+    # acted on -- regenerate / intersection re-rank are phases C/D). Verifiers that need the
+    # network only run when the batch is online (search provider wired); fail-open otherwise.
+    axes: list[str] = field(default_factory=list)   # subset of: unique, useful  (feasible = phase C)
+    demand_source: str = "hackernews"               # provider for the 'useful' demand anchor
+    k: int = 5
 
 
 @dataclass
@@ -125,6 +146,7 @@ class Config:
     provider: ProviderCfg = field(default_factory=ProviderCfg)
     generation: GenerationCfg = field(default_factory=GenerationCfg)
     novelty: NoveltyCfg = field(default_factory=NoveltyCfg)
+    verify: VerifyCfg = field(default_factory=VerifyCfg)
     messaging: MessagingCfg = field(default_factory=MessagingCfg)
     memory_kernels: list[MemoryKernelCfg] = field(default_factory=lambda: list(DEFAULT_KERNELS))
     consolidation: ConsolidationCfg = field(default_factory=ConsolidationCfg)
@@ -266,10 +288,18 @@ def load_config(path: str | Path = "config.yaml") -> Config:
     kernels_raw = data.get("memory_kernels") or []
     kernels = [MemoryKernelCfg(**k) for k in kernels_raw] if kernels_raw else list(DEFAULT_KERNELS)
 
+    generation = GenerationCfg(**(data.get("generation") or {}))
+    # YAML 1.1 coerces bare off/on/no/yes into booleans, so `lens_mode: off` arrives as
+    # False. Normalize back to a lowercase string (False -> "off", True -> "mixed").
+    if isinstance(generation.lens_mode, bool):
+        generation.lens_mode = "mixed" if generation.lens_mode else "off"
+    generation.lens_mode = str(generation.lens_mode).lower()
+
     return Config(
         provider=ProviderCfg(**(data.get("provider") or {})),
-        generation=GenerationCfg(**(data.get("generation") or {})),
+        generation=generation,
         novelty=NoveltyCfg(**(data.get("novelty") or {})),
+        verify=VerifyCfg(**(data.get("verify") or {})),
         messaging=MessagingCfg(
             channel=msg.get("channel", "telegram"),
             telegram=TelegramCfg(**tg),

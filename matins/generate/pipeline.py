@@ -364,6 +364,20 @@ def run_batch(
         gate_search = OpenAlexSearchProvider(api_key=cfg.openalex_api_key())
 
     slots = SLOTS[: cfg.generation.n_slots]
+
+    # Grounding lens (Idea Oracle port): hand each lens-enabled slot a DISTINCT, real external
+    # vantage it must serve, so ideas stop floating in abstract method-space / circling the
+    # user's own work. Sampled once per batch, avoiding vantages used in recent days. random
+    # is never lensed (it is pure perturbation). Fail-open: off / empty pool -> no lenses.
+    lens_by_slot: dict[str, object] = {}
+    if cfg.generation.lens_mode != "off":
+        from .lens import load_lenses, lenses_for_mode, sample_lenses
+        pool = lenses_for_mode(load_lenses(prompts_dir), cfg.generation.lens_mode)
+        targets = [s for s in slots if s in cfg.generation.lens_slots and s != "random"]
+        if pool and targets:
+            recent = store.recent_lens_tags(cfg.retrieval.dedup_against_days)
+            lens_by_slot = dict(zip(targets, sample_lenses(pool, len(targets), exclude_names=recent)))
+
     ideas: list[Idea] = []
     siblings: list[dict] = []          # ideas already produced THIS batch (within-batch distinctness)
     for slot in slots:
@@ -386,6 +400,7 @@ def run_batch(
                 "recent_ideas": recent_ideas + siblings,
                 "archive": revival,
                 "occupied": siblings,   # B2: 'domain . method' cells already taken THIS batch
+                "lens": lens_by_slot.get(slot),   # grounding vantage for this slot (or None)
             }
             prompt = build_generation_prompt(
                 slot, context, prompts_dir, cfg.generation.output_language, genes_try
@@ -446,6 +461,7 @@ def run_batch(
             tractability=parsed["tractability"],
             fit_to_program=parsed["fit_to_program"],
             behavior=parsed.get("behavior", ""),
+            lens=getattr(lens_by_slot.get(slot), "name", ""),
             random_genes=json.dumps(used_genes, ensure_ascii=False) if used_genes else "",
             created_at=now_iso(),
         )
@@ -466,10 +482,21 @@ def run_batch(
     for idea in ideas:
         store.insert_idea(idea)
 
-    # Novelty check (DESIGN.md section 7). Lazy import: leaf module.
-    from .novelty import attach_prior_art
+    # Verification (DESIGN.md section 7; MATINS_UPGRADE_PLAN A+B). When verify.axes is set,
+    # the externally-anchored verifier panel runs (unique replaces the legacy novelty note and
+    # still fills prior_art; useful adds a demand-grounded verdict). Otherwise the legacy
+    # single novelty step runs unchanged. Both advisory: never block a batch on a search failure.
     try:
-        attach_prior_art(ideas, search, store, k=cfg.novelty.k, batch_id=batch_id)
+        if cfg.verify.axes:
+            from .verify import run_panel
+            demand_search = None
+            if "useful" in cfg.verify.axes and search is not None:   # online only -> offline-safe
+                from ..providers.search_web import get_retrieval_searcher
+                demand_search = get_retrieval_searcher(cfg.verify.demand_source, cfg)
+            run_panel(ideas, cfg, search, store, batch_id=batch_id, demand_search=demand_search)
+        else:
+            from .novelty import attach_prior_art
+            attach_prior_art(ideas, search, store, k=cfg.novelty.k, batch_id=batch_id)
     except Exception:
         pass  # advisory step; never block a batch on search failure
 

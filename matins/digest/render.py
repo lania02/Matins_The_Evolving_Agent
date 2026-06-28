@@ -7,12 +7,30 @@ the user can reply per-idea, and every message is kept under the Telegram
 """
 from __future__ import annotations
 
+import json
+
 from matins.store.models import SLOT_LABELS
 
 # Telegram hard limit per message; keep a margin so the ellipsis always fits.
 _MAX_LEN = 4096
 _TRUNCATE_AT = _MAX_LEN - 1
 _ELLIPSIS = "…"
+
+
+def _format_verdicts(verdicts_json: str) -> str:
+    """Compact one-line scorecard from the verifier panel JSON ("" when none/legacy)."""
+    try:
+        v = json.loads(verdicts_json or "{}")
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(v, dict) or not v:
+        return ""
+    parts = []
+    for axis in ("useful", "unique", "feasible"):
+        d = v.get(axis)
+        if isinstance(d, dict) and "score" in d:
+            parts.append(f"{axis} {float(d['score']):.2f} (conf {float(d.get('confidence', 0)):.2f})")
+    return " · ".join(parts)
 
 
 def _truncate(text: str) -> str:
@@ -50,12 +68,14 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
             if value:
                 lines.append(f"{field_label}: {value}")
 
+        add("Vantage", idea.lens)                    # the real-world grounding lens, if any
         add("Bridge", idea.bridge)                   # the collision, shown first as the headline
         add("Mechanism", idea.mechanism)
         add("Why now", idea.why_now)
         add("Math structure", idea.math_structure)  # skipped when empty
         add("Tractability", idea.tractability)
         add("Fit to program", idea.fit_to_program)
+        add("Checks", _format_verdicts(idea.verdicts))   # verifier-panel scorecard (if any)
 
         prior_art = (idea.prior_art or "").strip()
         if prior_art:
@@ -122,12 +142,14 @@ def render_overview(store, batches, *, db_path: str | None = None) -> str:
             badge = " · 🔬 deep-dived" if store.get_deep_dive(idea.idea_id) else ""
             out.append(f"### #{idea.idx} [{label}] {idea.title}{badge}")
             for field_label, value in (
+                ("Vantage", idea.lens),
                 ("Bridge", idea.bridge),
                 ("Mechanism", idea.mechanism),
                 ("Why now", idea.why_now),
                 ("Math structure", idea.math_structure),
                 ("Tractability", idea.tractability),
                 ("Fit to program", idea.fit_to_program),
+                ("Checks", _format_verdicts(idea.verdicts)),
                 ("Prior art", idea.prior_art),
             ):
                 value = (value or "").strip()
@@ -164,12 +186,14 @@ def render_favorites_md(favorites) -> str:
             out.append(f"> {note}")
         out.append("")
         for field_label, value in (
+            ("Vantage", idea.lens),
             ("Bridge", idea.bridge),
             ("Mechanism", idea.mechanism),
             ("Why now", idea.why_now),
             ("Math structure", idea.math_structure),
             ("Tractability", idea.tractability),
             ("Fit to program", idea.fit_to_program),
+            ("Checks", _format_verdicts(idea.verdicts)),
             ("Prior art", idea.prior_art),
         ):
             value = (value or "").strip()

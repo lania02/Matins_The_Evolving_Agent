@@ -31,6 +31,8 @@ the domain). A new idea that reuses BOTH the same domain AND the same method as 
 cell is a collapsed restatement and will be rejected. State your own "behavior" tag so the
 stretched dimension is explicit.
 
+{{LENS}}
+
 == WORTH REVISITING (directions the user liked before but we have drifted away from) ==
 {{ARCHIVE}}
 

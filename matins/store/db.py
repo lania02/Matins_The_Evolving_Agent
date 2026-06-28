@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS ideas (
   tractability    TEXT,
   fit_to_program  TEXT,
   behavior        TEXT DEFAULT '',       -- 2-4 word "domain . method" tag; behavior coord for the archive
+  lens            TEXT DEFAULT '',       -- the grounding vantage this idea served (profession / research domain)
+  verdicts        TEXT DEFAULT '',       -- JSON of per-axis verifier verdicts (unique/useful/feasible)
   random_genes    TEXT,
   self_rank       INTEGER,
   self_rationale  TEXT,
@@ -140,6 +142,8 @@ class Store:
         self._ensure_column("feedback", "comment_kind", "TEXT DEFAULT ''")
         self._ensure_column("ideas", "behavior", "TEXT DEFAULT ''")
         self._ensure_column("ideas", "bridge", "TEXT DEFAULT ''")
+        self._ensure_column("ideas", "lens", "TEXT DEFAULT ''")
+        self._ensure_column("ideas", "verdicts", "TEXT DEFAULT ''")
         self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -198,18 +202,26 @@ class Store:
         self.conn.execute(
             """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, bridge, mechanism,
                why_now, math_structure, prior_art, tractability, fit_to_program,
-               behavior, random_genes, self_rank, self_rationale, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               behavior, lens, verdicts, random_genes, self_rank, self_rationale, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title, idea.bridge,
              idea.mechanism, idea.why_now, idea.math_structure, idea.prior_art,
-             idea.tractability, idea.fit_to_program, idea.behavior, idea.random_genes,
-             idea.self_rank, idea.self_rationale, idea.created_at or now_iso()),
+             idea.tractability, idea.fit_to_program, idea.behavior, idea.lens,
+             idea.verdicts, idea.random_genes, idea.self_rank, idea.self_rationale,
+             idea.created_at or now_iso()),
         )
         self.conn.commit()
 
     def update_idea_prior_art(self, idea_id: str, prior_art: str) -> None:
         self.conn.execute(
             "UPDATE ideas SET prior_art=? WHERE idea_id=?", (prior_art, idea_id)
+        )
+        self.conn.commit()
+
+    def update_idea_verdicts(self, idea_id: str, verdicts_json: str) -> None:
+        """Attach the verifier panel's per-axis verdicts (JSON) to an idea row."""
+        self.conn.execute(
+            "UPDATE ideas SET verdicts=? WHERE idea_id=?", (verdicts_json, idea_id)
         )
         self.conn.commit()
 
@@ -299,6 +311,18 @@ class Store:
             (cutoff, exclude_batch_id, exclude_batch_id),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def recent_lens_tags(self, days: int) -> list[str]:
+        """Distinct grounding vantages used in the last `days` days, so the lens sampler can
+        avoid re-serving the same profession / domain day after day (diversity over time)."""
+        cutoff = _cutoff_date(days)
+        rows = self.conn.execute(
+            """SELECT DISTINCT i.lens AS lens
+               FROM ideas i JOIN batches b ON i.batch_id = b.batch_id
+               WHERE b.date >= ? AND i.lens IS NOT NULL AND TRIM(i.lens) != ''""",
+            (cutoff,),
+        ).fetchall()
+        return [r["lens"] for r in rows]
 
     def archive_revival(self, *, dormant_days: int = 21, limit: int = 3,
                         max_rank: int = 2) -> list[dict]:

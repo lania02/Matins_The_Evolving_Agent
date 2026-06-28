@@ -11,6 +11,15 @@ generation:
   n_slots: 4
   temperature: 0.4           # explore aggressiveness (0..1); scales how far B/C/D depart from A
   output_language: bilingual # en | zh | bilingual
+  # Grounding lens: hand a slot a REAL external vantage (from prompts/lenses.yaml) it must
+  # serve, so ideas stop floating in the abstract. Modes: off | research | product | mixed.
+  #   research -- real domain/phenomenon + data + open questions (research ideas)
+  #   product  -- a real profession + O*NET-style task-frictions, weekend-demo framing
+  #   mixed    -- both kinds (a research engine and a buildable-product engine in one)
+  lens_mode: off
+  lens_slots:                # which slots get a vantage (random is never lensed)
+    - adjacent
+    - orthogonal
 
 novelty:
   search_provider: openalex  # openalex | arxiv | web | none
@@ -27,6 +36,15 @@ novelty:
   #                           fights their purpose and just burns API calls.
   saturation_gate_slots:
     - orthogonal
+
+verify:                       # Verifier panel (MATINS_UPGRADE_PLAN A+B). Externally-anchored,
+  axes: []                    # per-axis verdicts on each idea. [] = off (legacy single novelty note).
+                              # Turn on with e.g. [unique, useful]:
+                              #   unique -- calibrated novelty ("searched != novel"); replaces the note
+                              #   useful -- demand-grounded ("does anyone actually ask for this?")
+                              # Advisory for now (recorded, not yet acted on). feasible = a later phase.
+  demand_source: hackernews   # provider for the 'useful' demand anchor (keyless)
+  k: 5
 
 messaging:
   channel: telegram          # telegram | none | whatsapp_baileys | whatsapp_cloud
