@@ -65,6 +65,9 @@ class VerifyCfg:
     axes: list[str] = field(default_factory=list)   # subset of: unique, useful  (feasible = phase C)
     demand_source: str = "hackernews"               # provider for the 'useful' demand anchor
     k: int = 5
+    # Phase D: per-axis weights for the multiplicative intersection score (the external
+    # floor under taste). Missing axes fall back to the shipped defaults in verify.py.
+    weights: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -295,8 +298,27 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         generation.lens_mode = "mixed" if generation.lens_mode else "off"
     generation.lens_mode = str(generation.lens_mode).lower()
 
+    # Pluggable LLM providers: an optional top-level `providers:` roster of named endpoint
+    # configs + `active_provider:` naming the one to run on. Switching vendors/models is
+    # then a one-line change (or one env var of keys away). The flat `provider:` block
+    # remains the single-provider form and the fallback. Fail loud on a dangling name --
+    # a silent fallback would run the wrong (possibly expensive) model.
+    roster = data.get("providers") or {}
+    active = data.get("active_provider") or ""
+    if roster:
+        if not active:
+            raise ValueError("`providers:` roster given but `active_provider:` is not set")
+        if active not in roster:
+            raise ValueError(
+                f"active_provider {active!r} not in providers roster "
+                f"(available: {', '.join(sorted(roster))})"
+            )
+        provider = ProviderCfg(**(roster[active] or {}))
+    else:
+        provider = ProviderCfg(**(data.get("provider") or {}))
+
     return Config(
-        provider=ProviderCfg(**(data.get("provider") or {})),
+        provider=provider,
         generation=generation,
         novelty=NoveltyCfg(**(data.get("novelty") or {})),
         verify=VerifyCfg(**(data.get("verify") or {})),

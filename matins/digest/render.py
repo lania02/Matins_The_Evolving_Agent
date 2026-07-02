@@ -30,7 +30,33 @@ def _format_verdicts(verdicts_json: str) -> str:
         d = v.get(axis)
         if isinstance(d, dict) and "score" in d:
             parts.append(f"{axis} {float(d['score']):.2f} (conf {float(d.get('confidence', 0)):.2f})")
+    inter = v.get("intersect")
+    if isinstance(inter, (int, float)):
+        tag = f"∩ {float(inter):.2f}"
+        if float(inter) < 0.35:
+            tag += " ⚠ below evidence floor"
+        parts.append(tag)
     return " · ".join(parts)
+
+
+def _intersect_of(idea) -> float | None:
+    try:
+        v = json.loads(idea.verdicts or "{}")
+        inter = v.get("intersect")
+        return float(inter) if isinstance(inter, (int, float)) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _evidence_ranking_line(ideas) -> str:
+    """Header line ranking today's ideas by intersection score (the external evidence floor,
+    shown UNDER your taste: it orders by anchored usefulness x uniqueness, so slop sinks).
+    "" when fewer than 2 ideas carry a score."""
+    scored = [(i.idx, s) for i in ideas if (s := _intersect_of(i)) is not None]
+    if len(scored) < 2:
+        return ""
+    scored.sort(key=lambda t: (-t[1], t[0]))
+    return "evidence ranking (∩): " + " > ".join(f"#{idx}" for idx, _ in scored)
 
 
 def _truncate(text: str) -> str:
@@ -56,6 +82,9 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
         "Reply best to worst by number, e.g. 3>1>4>2 . "
         "Add comments like: #3 your note",
     ]
+    ranking = _evidence_ranking_line(ideas)
+    if ranking:
+        header_lines.append(ranking)
     header = "\n".join(header_lines)
 
     messages: list[str] = []
