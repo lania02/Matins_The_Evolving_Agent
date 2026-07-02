@@ -105,6 +105,12 @@ retrieval:
     hackernews: 1
   max_items: 8
   openalex_api_key_env: OPENALEX_API_KEY
+  # OPTIONAL 'trending' feed channel (add `trending: 2` to blend above): the live HN front
+  # page + this week's hot threads from these subreddits. Subreddit mining needs a SerpAPI
+  # key (SERP_API_KEY in .env; free tier is fine); without it the pulse is HN-only.
+  # trend_subreddits:
+  #   - ClaudeAI
+  #   - LocalLLaMA
 
 deep_dive:                   # on-demand `dig #N` grounded briefings
   model: ""   # stronger model for synthesis; "" = use provider.model

@@ -118,6 +118,12 @@ class RetrievalCfg:
     })
     max_items: int = 8                          # hard cap on the blended feed
     openalex_api_key_env: str = "OPENALEX_API_KEY"
+    serp_api_key_env: str = "SERP_API_KEY"      # SerpAPI (Google) -- subreddit trend mining
+    # Subreddits mined by the 'trending' feed channel (this week's hot threads, via SerpAPI
+    # path-level site: queries). The channel also always carries the live HN front page.
+    trend_subreddits: list[str] = field(default_factory=lambda: [
+        "ClaudeAI", "LocalLLaMA", "MachineLearning", "artificial",
+    ])
 
 
 @dataclass
@@ -209,6 +215,9 @@ class Config:
 
     def openalex_api_key(self) -> str | None:
         return os.environ.get(self.retrieval.openalex_api_key_env)
+
+    def serp_api_key(self) -> str | None:
+        return os.environ.get(self.retrieval.serp_api_key_env)
 
     def dig_model(self) -> str:
         """Model for on-demand deep dives (falls back to the main provider model)."""

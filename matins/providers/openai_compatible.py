@@ -20,9 +20,9 @@ from ..config import Config
 
 # Short connect (fail fast if the endpoint is down) but a long read: the on-demand
 # deep dive stuffs up to ~40 retrieved sources into one prompt and asks for a long
-# structured briefing, which can take minutes on a shared endpoint. A 120s read
-# ceiling was tripping that synthesis ("The read operation timed out").
-_TIMEOUT = httpx.Timeout(300.0, connect=15.0)
+# structured briefing, and reasoning-tier models (minimax-m3) can think for minutes
+# on a full generation prompt. A 300s read ceiling was tripping both.
+_TIMEOUT = httpx.Timeout(600.0, connect=15.0)
 
 
 class OpenAICompatibleProvider:
@@ -46,12 +46,31 @@ class OpenAICompatibleProvider:
         payload = {
             "model": self._model,
             "temperature": temperature,
+            # Some gateways (e.g. NVIDIA's for minimax-m3) return HTTP 200 with an EMPTY
+            # choices list when max_tokens is omitted, instead of applying a default.
+            # Always send a generous cap so every model on the roster behaves.
+            "max_tokens": 8192,
             "messages": [{"role": "user", "content": prompt}],
         }
-        resp = httpx.post(url, headers=headers, json=payload, timeout=_TIMEOUT)
+        try:
+            resp = httpx.post(url, headers=headers, json=payload, timeout=_TIMEOUT)
+        except httpx.HTTPError as exc:
+            # Map transport failures (read timeout, connect error, ...) to RuntimeError so
+            # the slot-retry loop treats them as a failed ATTEMPT. A raw httpx.ReadTimeout
+            # is not in the loop's except clause and killed a whole batch (seen live with
+            # minimax-m3 thinking past the read ceiling).
+            raise RuntimeError(f"OpenAI-compatible transport error: {exc!r}") from exc
         if not (200 <= resp.status_code < 300):
             raise RuntimeError(
                 f"OpenAI-compatible API error {resp.status_code}: {resp.text[:500]}"
             )
         data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        choices = data.get("choices") or []
+        if not choices:
+            # Fail loud with the body head -- an empty-choices 200 otherwise surfaces as a
+            # bare IndexError that hides which endpoint/model misbehaved.
+            raise RuntimeError(
+                f"OpenAI-compatible API returned no choices (model={self._model}): "
+                f"{resp.text[:300]}"
+            )
+        return choices[0]["message"]["content"]

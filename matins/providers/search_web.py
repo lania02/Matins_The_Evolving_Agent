@@ -395,6 +395,102 @@ class HackerNewsSearchProvider:
             return []
 
 
+class SerpSearchProvider:
+    """Google search via SerpAPI (SERP_API_KEY). Unlike Tavily's domain filter, Google
+    honors PATH-level site: queries (site:reddit.com/r/LocalLLaMA), which is what makes
+    subreddit-targeted trend mining possible. Best-effort: any error returns []."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def search(self, query: str, *, k: int = 5, extra: dict | None = None) -> list[dict]:
+        if not self.api_key:
+            return []
+        try:
+            params = {"engine": "google", "q": query, "num": max(1, k),
+                      "api_key": self.api_key, **(extra or {})}
+            resp = httpx.get("https://serpapi.com/search.json", params=params,
+                             timeout=60, follow_redirects=True)
+            if not (200 <= resp.status_code < 300):
+                logger.warning("serp HTTP %s for %r", resp.status_code, query)
+                return []
+            out = []
+            for r in (resp.json().get("organic_results") or []):
+                title = _collapse(r.get("title") or "", limit=300)
+                if title:
+                    out.append({"title": title, "url": (r.get("link") or "").strip(),
+                                "snippet": _collapse(r.get("snippet") or "", limit=300)})
+            return out[:k]
+        except Exception as exc:
+            logger.warning("serp search failed for %r: %s", query, exc)
+            return []
+
+
+class TrendingPulseProvider:
+    """Today's tech pulse: the LIVE Hacker News front page + this week's hot threads from
+    configured subreddits (r/ClaudeAI, r/LocalLLaMA, ...).
+
+    Unlike every other channel this IGNORES the caller's query -- it is a pulse, not a
+    search. The pool is fetched ONCE per instance and served from cache, so the retrieval
+    loop's per-source-query calls walk down the same ranked list (its shared `seen` set
+    picks successive fresh items) instead of re-hitting the APIs. Subreddit mining needs
+    the SerpAPI key (path-level site: query, freshness-limited to the past week); without
+    it the pulse degrades to HN-front-page only. Best-effort throughout.
+    """
+
+    def __init__(self, subreddits: list[str] | None = None, serp_key: str | None = None):
+        self.subreddits = [s.strip().lstrip("r/") for s in (subreddits or []) if s.strip()]
+        self.serp = SerpSearchProvider(serp_key) if serp_key else None
+        self._pool: list[dict] | None = None
+
+    def _fetch_hn_front(self, k: int = 8) -> list[dict]:
+        try:
+            resp = httpx.get("https://hn.algolia.com/api/v1/search",
+                             params={"tags": "front_page", "hitsPerPage": k},
+                             timeout=60, follow_redirects=True)
+            if not (200 <= resp.status_code < 300):
+                return []
+            out = []
+            for h in (resp.json().get("hits") or []):
+                title = _collapse(h.get("title") or "", limit=300)
+                url = (h.get("url") or "").strip()
+                if not url and h.get("objectID"):
+                    url = f"https://news.ycombinator.com/item?id={h['objectID']}"
+                if title:
+                    out.append({"title": f"[HN front] {title}", "url": url,
+                                "snippet": f"{h.get('points', 0)} points, {h.get('num_comments', 0)} comments"})
+            return out
+        except Exception as exc:
+            logger.warning("hn front page failed: %s", exc)
+            return []
+
+    def _fetch_subreddit(self, sub: str, k: int = 3) -> list[dict]:
+        if self.serp is None:
+            return []
+        hits = self.serp.search(f"site:reddit.com/r/{sub}", k=k, extra={"tbs": "qdr:w"})
+        return [{**h, "title": f"[r/{sub}] {h['title']}"} for h in hits]
+
+    def _build_pool(self) -> list[dict]:
+        hn = self._fetch_hn_front()
+        subs = [self._fetch_subreddit(s) for s in self.subreddits]
+        # Round-robin: alternate one subreddit thread with one HN story so the head of the
+        # pool (what actually fits the feed quota) mixes both kinds of heat.
+        out: list[dict] = []
+        depth = 0
+        buckets = [b for b in subs if b] + ([hn] if hn else [])
+        while any(depth < len(b) for b in buckets):
+            for b in buckets:
+                if depth < len(b):
+                    out.append(b[depth])
+            depth += 1
+        return out[:16]
+
+    def search(self, query: str, *, k: int = 5) -> list[dict]:
+        if self._pool is None:
+            self._pool = self._build_pool()
+        return self._pool          # full ranked pool; caller's dedup walks down it
+
+
 def get_web_searcher(cfg) -> SearchProvider | None:
     """Web searcher for the deep dive (Tavily), or None when unconfigured/keyless."""
     if cfg.deep_dive.web_search == "tavily":
@@ -422,6 +518,12 @@ def get_retrieval_searcher(name: str, cfg) -> SearchProvider | None:
         return HackerNewsSearchProvider()
     if name == "reddit":
         return RedditSearchProvider(api_key=cfg.deep_dive_web_key())   # Tavily key optional
+    if name == "serp":
+        key = cfg.serp_api_key()
+        return SerpSearchProvider(key) if key else None
+    if name == "trending":
+        return TrendingPulseProvider(subreddits=cfg.retrieval.trend_subreddits,
+                                     serp_key=cfg.serp_api_key())
     if name == "web":
         return WebSearchProvider()
     return None
