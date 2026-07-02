@@ -91,3 +91,58 @@ def test_dig_provider_uses_standalone_override_without_touching_main() -> None:
     assert dp.model == "agnes-2.0-flash"
     assert cfg.provider.base_url == "https://main/v1"       # main provider unchanged
     assert cfg.provider.model == "main-model"
+
+
+def test_provider_roster_resolves_active(tmp_path) -> None:
+    # Pluggable providers: `providers:` + `active_provider:` selects one endpoint config;
+    # switching vendors/models is a one-line edit.
+    cfg_file = tmp_path / "c.yaml"
+    cfg_file.write_text(
+        "active_provider: nvidia-llama\n"
+        "providers:\n"
+        "  nvidia-llama:\n"
+        "    name: openai_compatible\n"
+        "    model: meta/llama-3.3-70b-instruct\n"
+        "    base_url: https://integrate.api.nvidia.com/v1\n"
+        "    api_key_env: NVIDIA_API_KEY\n"
+        "  alt:\n"
+        "    name: openai_compatible\n"
+        "    model: other-model\n"
+        "    base_url: https://integrate.api.nvidia.com/v1\n"
+        "    api_key_env: NVIDIA_API_KEY_ALT\n",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.provider.model == "meta/llama-3.3-70b-instruct"
+    assert cfg.provider.api_key_env == "NVIDIA_API_KEY"
+
+    # one-line switch
+    cfg_file.write_text(cfg_file.read_text(encoding="utf-8").replace(
+        "active_provider: nvidia-llama", "active_provider: alt"), encoding="utf-8")
+    assert load_config(cfg_file).provider.model == "other-model"
+
+
+def test_provider_roster_fails_loud_on_dangling_active(tmp_path) -> None:
+    import pytest
+
+    cfg_file = tmp_path / "c.yaml"
+    cfg_file.write_text(
+        "active_provider: nope\n"
+        "providers:\n"
+        "  real:\n"
+        "    name: openai_compatible\n"
+        "    model: m\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="nope"):
+        load_config(cfg_file)
+
+    cfg_file.write_text(
+        "providers:\n"
+        "  real:\n"
+        "    name: openai_compatible\n"
+        "    model: m\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="active_provider"):
+        load_config(cfg_file)

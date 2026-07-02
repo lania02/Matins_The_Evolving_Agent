@@ -7,6 +7,22 @@ provider:
   base_url: https://generativelanguage.googleapis.com/v1beta/openai  # Gemini OpenAI-compatible endpoint
   api_key_env: GEMINI_API_KEY   # NAME of the env var (defined in .env), NOT the key itself
 
+# OPTIONAL pluggable-provider roster: define several named endpoints and switch with one
+# line. When `providers:` is present it takes precedence over the flat `provider:` block,
+# and `active_provider:` MUST name one of the entries (fails loud otherwise).
+# active_provider: nvidia-llama
+# providers:
+#   nvidia-llama:
+#     name: openai_compatible
+#     model: meta/llama-3.3-70b-instruct
+#     base_url: https://integrate.api.nvidia.com/v1   # NVIDIA developer platform
+#     api_key_env: NVIDIA_API_KEY
+#   another-endpoint:
+#     name: openai_compatible
+#     model: <model-id>
+#     base_url: <openai-compatible-endpoint>/v1
+#     api_key_env: ANOTHER_API_KEY
+
 generation:
   n_slots: 4
   temperature: 0.4           # explore aggressiveness (0..1); scales how far B/C/D depart from A
@@ -43,7 +59,9 @@ verify:                       # Verifier panel (MATINS_UPGRADE_PLAN A+B). Extern
                               #   unique -- calibrated novelty ("searched != novel"); replaces the note
                               #   useful -- demand-grounded ("does anyone actually ask for this?")
                               # Advisory for now (recorded, not yet acted on). feasible = a later phase.
-  demand_source: hackernews   # provider for the 'useful' demand anchor (keyless)
+  demand_source: hackernews   # 'useful' demand anchor: hackernews (keyless) | reddit
+                              # (reddit routes via Tavily include_domains when TAVILY_API_KEY
+                              #  is set -- the richest friction corpus -- else a DDG fallback)
   k: 5
 
 messaging:
