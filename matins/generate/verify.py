@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from ..store.db import Store
@@ -95,8 +96,23 @@ class UniqueVerifier:
                        note="no close hits -- absence is weak evidence, NOT confirmed novel")
 
 
+def _demand_query(idea: Idea) -> str:
+    """Build a query tuned for DEMAND corpora (HN / Reddit), not scholarly ones.
+
+    The live probe showed the scholarly 4-term ANDed query from build_query_from_fields gets
+    0/4 recall on HN -- conversations don't use method vocabulary. Anchor on the idea's
+    grounding lens (a real profession/domain, e.g. 'Logistics dispatcher' -> hits Terusama /
+    'dispatch scheduling SUCKS' threads) when present; else fall back to the 2 broadest terms.
+    """
+    lens = " ".join(re.sub(r"[^A-Za-z0-9 ]", " ", idea.lens or "").split()[:3]).strip().lower()
+    if lens:
+        return lens
+    terms = build_query_from_fields(idea.title, "", idea.mechanism).split()
+    return " ".join(terms[:2]) or (idea.title or "").strip()
+
+
 class UsefulVerifier:
-    """Anchor: a real demand corpus (Hacker News by default). Usefulness is a claim about the
+    """Anchor: a real demand corpus (Hacker News / Reddit). Usefulness is a claim about the
     WORLD -- someone has this pain -- so it must be evidenced, never asserted from the idea text."""
 
     axis = "useful"
@@ -108,7 +124,7 @@ class UsefulVerifier:
                batch_id: str | None = None) -> Verdict:
         if self.demand is None:
             return Verdict(self.axis, 0.50, 0.0, [], note="no demand source: usefulness unverified")
-        query = build_query_from_fields(idea.title, "", idea.mechanism)
+        query = _demand_query(idea)
         try:
             results = self.demand.search(query, k=k) or []
         except Exception as exc:
@@ -119,6 +135,45 @@ class UsefulVerifier:
                            note="observed demand signal -- real discussion / requests exist around this")
         return Verdict(self.axis, 0.35, 0.40, [],
                        note="no observed demand found -- may be latent, but no evidence of pull")
+
+
+# Phase D: multiplicative intersection. Weights come from cfg.verify.weights; these are the
+# shipped defaults (feasible discounted until its verifier exists in phase C).
+_DEFAULT_WEIGHTS = {"useful": 1.0, "unique": 1.0, "feasible": 0.8}
+
+
+def effective_score(verdict: dict) -> float:
+    """Confidence-tempered axis score: pulled toward the neutral 0.5 when poorly anchored.
+
+    An unverified axis (confidence 0) must neither sink nor inflate the intersection --
+    otherwise an offline day would nuke every idea's floor. Fully-anchored verdicts pass
+    through unchanged.
+    """
+    s = float(verdict.get("score", 0.5))
+    c = float(verdict.get("confidence", 0.0))
+    return 0.5 + max(0.0, min(1.0, c)) * (s - 0.5)
+
+
+def intersect_score(verdicts: dict, weights: dict | None = None) -> float | None:
+    """Weighted geometric mean of the confidence-tempered axis scores (0..1).
+
+    Multiplicative on purpose: one weak axis punishes the whole (useful-but-not-unique slop
+    must sink), unlike an average where strong axes can paper over a fatal one. Only the
+    axes actually present count; returns None when there are none.
+    """
+    w = {**_DEFAULT_WEIGHTS, **(weights or {})}
+    prod, total = 1.0, 0.0
+    for axis, verdict in verdicts.items():
+        if not isinstance(verdict, dict) or "score" not in verdict:
+            continue
+        weight = float(w.get(axis, 1.0))
+        if weight <= 0:
+            continue
+        prod *= max(0.01, effective_score(verdict)) ** weight
+        total += weight
+    if total == 0:
+        return None
+    return round(prod ** (1.0 / total), 3)
 
 
 def build_verifiers(cfg, search, *, demand_search=None) -> list:
@@ -155,6 +210,10 @@ def run_panel(ideas: list[Idea], cfg, search, store: Store, *, batch_id: str,
                 logger.warning("verifier %s failed for %s: %s", v.axis, idea.idea_id, exc)
                 verdict = Verdict(v.axis, 0.50, 0.0, [], note=f"verifier error: {exc}")
             verdicts[verdict.axis] = verdict.to_dict()
+        # Phase D: the multiplicative intersection -- the external floor under taste.
+        inter = intersect_score(verdicts, getattr(cfg.verify, "weights", None))
+        if inter is not None:
+            verdicts["intersect"] = inter
         payload = json.dumps(verdicts, ensure_ascii=False)
         store.update_idea_verdicts(idea.idea_id, payload)
         idea.verdicts = payload

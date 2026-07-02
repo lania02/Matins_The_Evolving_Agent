@@ -62,6 +62,28 @@ def test_unique_verifier_reuses_saturation_prior_art_without_searching():
     assert v.evidence and v.confidence > 0
 
 
+def test_demand_query_prefers_lens_then_broad_terms():
+    # The live probe showed the scholarly 4-term query gets 0 recall on demand corpora;
+    # the demand query must anchor on the lens (a real domain) or fall back to 2 broad terms.
+    from matins.generate.verify import _demand_query
+
+    lensed = _idea()
+    lensed.lens = "Logistics dispatcher"
+    assert _demand_query(lensed) == "logistics dispatcher"
+
+    unlensed = _idea()
+    q = _demand_query(unlensed)
+    assert 1 <= len(q.split()) <= 2                 # broad, not the 4-term scholarly AND
+
+
+def test_useful_verifier_queries_with_demand_query():
+    s = FakeSearch([{"title": "Ask HN: need this", "url": "http://d"}])
+    idea = _idea()
+    idea.lens = "Logistics dispatcher"
+    UsefulVerifier(s).assess(idea, k=5)
+    assert s.queries == ["logistics dispatcher"]    # lens-anchored, not the scholarly query
+
+
 # ---- unit: useful verifier (demand anchor) -----------------------------------
 def test_useful_verifier_scores_observed_demand():
     found = UsefulVerifier(FakeSearch([{"title": "Ask HN: I wish a tool existed for X", "url": "http://hn"}]))
@@ -71,6 +93,69 @@ def test_useful_verifier_scores_observed_demand():
     none = UsefulVerifier(FakeSearch([]))
     assert none.assess(_idea(), k=5).score < 0.5            # no observed pull
     assert UsefulVerifier(None).assess(_idea(), k=5).confidence == 0.0
+
+
+# ---- phase D: intersection score ----------------------------------------------
+def test_effective_score_tempers_by_confidence():
+    from matins.generate.verify import effective_score
+    assert effective_score({"score": 0.9, "confidence": 1.0}) == 0.9   # fully anchored: pass through
+    assert effective_score({"score": 0.9, "confidence": 0.0}) == 0.5   # unanchored: neutral
+    assert abs(effective_score({"score": 0.9, "confidence": 0.5}) - 0.7) < 1e-9
+
+
+def test_intersect_score_multiplicative_and_partial_axes():
+    from matins.generate.verify import intersect_score
+    strong = {"useful": {"score": 0.8, "confidence": 1.0},
+              "unique": {"score": 0.8, "confidence": 1.0}}
+    slop = {"useful": {"score": 0.8, "confidence": 1.0},
+            "unique": {"score": 0.1, "confidence": 1.0}}      # useful-but-not-unique
+    s1, s2 = intersect_score(strong), intersect_score(slop)
+    assert s1 is not None and s2 is not None and s2 < s1      # slop sinks
+    assert s2 < 0.35                                          # below the evidence floor
+    # a single available axis still yields a score; no axes -> None
+    assert intersect_score({"useful": {"score": 0.6, "confidence": 1.0}}) is not None
+    assert intersect_score({}) is None
+    # weights: zero-weight axis is ignored
+    only_useful = intersect_score(slop, {"unique": 0.0})
+    assert only_useful is not None and only_useful > s2
+
+
+def test_run_panel_stores_intersect_and_digest_ranks_by_it():
+    from matins.digest.render import render_digest
+
+    cfg = load_config(str(REPO_ROOT / "config.example.yaml"))
+    cfg.verify.axes = ["unique", "useful"]
+
+    store = Store(":memory:")
+    store.insert_batch(Batch(batch_id="b9", date="2026-07-01"))
+    strong = Idea(idea_id="s", batch_id="b9", slot="highfit", idx=1,
+                  title="Strong (optimal transport)", mechanism="m (operator)")
+    weak = Idea(idea_id="w", batch_id="b9", slot="adjacent", idx=2,
+                title="Weak (optimal transport)", mechanism="m (operator)",
+                prior_art="closest prior art: Same idea -- http://prior")   # known close prior
+    store.insert_idea(strong)
+    store.insert_idea(weak)
+
+    # strong: no prior hits + demand found; weak: close prior + no demand
+    class SplitDemand:
+        def search(self, q, *, k=5):
+            return [{"title": "Ask HN: need this", "url": "http://d"}] if "Strong" not in q else \
+                   [{"title": "Ask HN: need this", "url": "http://d"}]
+    run_panel([strong], cfg, FakeSearch([]), store, batch_id="b9",
+              demand_search=FakeSearch([{"title": "Ask HN: need this", "url": "http://d"}]))
+    run_panel([weak], cfg, FakeSearch([]), store, batch_id="b9",
+              demand_search=FakeSearch([]))
+
+    import json as _json
+    vs = _json.loads(strong.verdicts)
+    vw = _json.loads(weak.verdicts)
+    assert isinstance(vs.get("intersect"), float) and isinstance(vw.get("intersect"), float)
+    assert vs["intersect"] > vw["intersect"]                  # evidence separates them
+
+    header, msgs = render_digest(Batch(batch_id="b9", date="2026-07-01"),
+                                 [strong, weak], "bilingual")
+    assert "evidence ranking (∩): #1 > #2" in header          # slop sinks in the header line
+    assert any("∩" in m for m in msgs)                        # scorecard carries the intersection
 
 
 # ---- run_panel persistence ---------------------------------------------------

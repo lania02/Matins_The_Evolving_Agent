@@ -34,6 +34,13 @@ def test_arxiv_web_and_none_routing() -> None:
     assert get_search_provider(_cfg("none")) is None        # disabled -> novelty is a no-op
 
 
+def test_reddit_routes_as_retrieval_and_demand_source() -> None:
+    # 'reddit' must resolve for both the daily feed and verify.demand_source (same factory).
+    from matins.providers.search_web import RedditSearchProvider, get_retrieval_searcher
+    p = get_retrieval_searcher("reddit", _cfg("arxiv"))
+    assert isinstance(p, RedditSearchProvider)
+
+
 def test_dig_provider_override_routes_to_its_own_endpoint() -> None:
     # End-to-end wiring (config -> factory -> adapter): a deep_dive provider override
     # builds the dig LLM against THAT vendor's base_url/model, while the main provider

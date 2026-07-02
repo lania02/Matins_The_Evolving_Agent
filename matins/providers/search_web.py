@@ -320,6 +320,54 @@ class OpenAlexSearchProvider:
             return None
 
 
+class RedditSearchProvider:
+    """Observed-demand / friction search over Reddit (the richest public pain corpus).
+
+    Reddit's own keyless JSON endpoints now 403 script traffic, so this routes through
+    (a) Tavily with include_domains=reddit.com when a key is available -- high recall,
+    returns post snippets ("dispatch scheduling SUCKS...") ready to cite as demand
+    evidence -- or (b) a DuckDuckGo `site:reddit.com` scrape as the keyless fallback.
+    Best-effort: any error returns [] (logged), so the daily loop never breaks.
+    """
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key
+
+    def search(self, query: str, *, k: int = 5) -> list[dict]:
+        if self.api_key:
+            hits = self._tavily(query, k)
+            if hits:
+                return hits
+        return self._ddg(query, k)
+
+    def _tavily(self, query: str, k: int) -> list[dict]:
+        try:
+            resp = httpx.post(
+                "https://api.tavily.com/search",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={"query": query, "max_results": max(1, k),
+                      "include_domains": ["reddit.com"],
+                      "search_depth": "basic", "include_answer": False},
+                timeout=60,
+            )
+            if not (200 <= resp.status_code < 300):
+                logger.warning("reddit(tavily) HTTP %s for %r", resp.status_code, query)
+                return []
+            out = []
+            for r in (resp.json().get("results") or []):
+                title = _collapse(r.get("title") or "", limit=300)
+                if title:
+                    out.append({"title": title, "url": (r.get("url") or "").strip(),
+                                "snippet": _collapse(r.get("content") or "", limit=300)})
+            return out
+        except Exception as exc:
+            logger.warning("reddit(tavily) failed for %r: %s", query, exc)
+            return []
+
+    def _ddg(self, query: str, k: int) -> list[dict]:
+        return WebSearchProvider().search(f"site:reddit.com {query}", k=k)
+
+
 class HackerNewsSearchProvider:
     """Community-signal search via the Hacker News Algolia API (free, no key).
 
@@ -372,6 +420,8 @@ def get_retrieval_searcher(name: str, cfg) -> SearchProvider | None:
         return TavilySearchProvider(key) if key else None
     if name == "hackernews":
         return HackerNewsSearchProvider()
+    if name == "reddit":
+        return RedditSearchProvider(api_key=cfg.deep_dive_web_key())   # Tavily key optional
     if name == "web":
         return WebSearchProvider()
     return None

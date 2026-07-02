@@ -370,13 +370,23 @@ def run_batch(
     # user's own work. Sampled once per batch, avoiding vantages used in recent days. random
     # is never lensed (it is pure perturbation). Fail-open: off / empty pool -> no lenses.
     lens_by_slot: dict[str, object] = {}
+    lens_pulse: dict[str, list] = {}
     if cfg.generation.lens_mode != "off":
-        from .lens import load_lenses, lenses_for_mode, sample_lenses
+        from .lens import fetch_lens_pulse, load_lenses, lenses_for_mode, sample_lenses
         pool = lenses_for_mode(load_lenses(prompts_dir), cfg.generation.lens_mode)
         targets = [s for s in slots if s in cfg.generation.lens_slots and s != "random"]
         if pool and targets:
             recent = store.recent_lens_tags(cfg.retrieval.dedup_against_days)
             lens_by_slot = dict(zip(targets, sample_lenses(pool, len(targets), exclude_names=recent)))
+        # Live pulse (online only): what each vantage's community is discussing right now
+        # (Reddit + HN), injected into the lens block as observed demand to serve. Free /
+        # existing-key searches; fail-open, and skipped entirely offline.
+        if lens_by_slot and search is not None:
+            from ..providers.search_web import get_retrieval_searcher
+            pulse_searchers = [p for p in (get_retrieval_searcher("reddit", cfg),
+                                           get_retrieval_searcher("hackernews", cfg)) if p]
+            for s, l in lens_by_slot.items():
+                lens_pulse[s] = fetch_lens_pulse(l, pulse_searchers)
 
     ideas: list[Idea] = []
     siblings: list[dict] = []          # ideas already produced THIS batch (within-batch distinctness)
@@ -401,6 +411,7 @@ def run_batch(
                 "archive": revival,
                 "occupied": siblings,   # B2: 'domain . method' cells already taken THIS batch
                 "lens": lens_by_slot.get(slot),   # grounding vantage for this slot (or None)
+                "lens_pulse": lens_pulse.get(slot),   # live community discussions for that vantage
             }
             prompt = build_generation_prompt(
                 slot, context, prompts_dir, cfg.generation.output_language, genes_try

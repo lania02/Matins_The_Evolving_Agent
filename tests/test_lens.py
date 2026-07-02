@@ -62,6 +62,42 @@ def test_sample_lenses_is_distinct_and_avoids_recent():
     assert sample_lenses([], 3) == []
 
 
+def test_fetch_lens_pulse_merges_and_dedups():
+    from matins.generate.lens import fetch_lens_pulse
+
+    class S:
+        def __init__(self, hits):
+            self.hits = hits
+
+        def search(self, q, *, k=5):
+            return self.hits
+
+    class Boom:
+        def search(self, q, *, k=5):
+            raise RuntimeError("down")
+
+    a = S([{"title": "T1", "url": "http://a"}, {"title": "dup", "url": "http://dup"}])
+    b = S([{"title": "dup2", "url": "http://dup"}, {"title": "T2", "url": "http://b"}])
+    pulse = fetch_lens_pulse(Lens("occupation", "Radiologist", {}), [a, Boom(), b])
+    urls = [p["url"] for p in pulse]
+    assert urls == ["http://a", "http://dup", "http://b"]   # deduped by url, failure skipped
+    assert fetch_lens_pulse(Lens("occupation", "X", {}), []) == []
+
+
+def test_render_lens_block_includes_pulse_and_priority():
+    occ = Lens("occupation", "Radiologist", {"frictions": ["fatigue misses"]})
+    pulse = [{"title": "What's your biggest frustration in radiology?",
+              "snippet": "the EMR switch made everything slower"}]
+    block = render_lens_block(occ, pulse)
+    assert "LIVE PULSE" in block
+    assert "biggest frustration" in block
+    assert "UNTRUSTED" in block                     # pulse text is fenced (injection guard)
+    assert "vantage LEADS" in block                 # overrides interest-seed topic gravity
+    # without a pulse: no LIVE PULSE section, but the priority line still present
+    no_pulse = render_lens_block(occ)
+    assert "LIVE PULSE" not in no_pulse and "vantage LEADS" in no_pulse
+
+
 def test_render_lens_block_shapes():
     occ = Lens("occupation", "Radiologist",
                {"tasks": ["read scans"], "frictions": ["fatigue misses"]})
@@ -106,9 +142,11 @@ def test_lens_assigned_recorded_rendered_and_skips_random():
     assert by_slot["highfit"].lens == ""                   # not in default lens_slots
     assert by_slot["random"].lens == ""                    # random is never lensed
 
-    assert "GROUNDING VANTAGE" in llm.prompts["ADJACENT-STRETCH"]
-    assert "GROUNDING VANTAGE" in llm.prompts["ORTHOGONAL"]
-    assert "GROUNDING VANTAGE" not in llm.prompts["RANDOM-MUTATION"]
+    assert "== GROUNDING VANTAGE" in llm.prompts["ADJACENT-STRETCH"]
+    assert "== GROUNDING VANTAGE" in llm.prompts["ORTHOGONAL"]
+    # the lens BLOCK (its == header) must not reach random; the interest seed may
+    # mention the phrase in prose, so match the block marker specifically.
+    assert "== GROUNDING VANTAGE" not in llm.prompts["RANDOM-MUTATION"]
 
     reread = {i.slot: i for i in store.ideas_for_batch(ideas[0].batch_id)}
     assert reread["orthogonal"].lens == by_slot["orthogonal"].lens   # round-trips through SQLite

@@ -86,11 +86,53 @@ def _line(label: str, items) -> str:
     return f"- {label}: " + "; ".join(vals) if vals else ""
 
 
-def render_lens_block(lens: Lens | None) -> str:
+def fetch_lens_pulse(lens: Lens, searchers, *, k: int = 3, cap: int = 4) -> list[dict]:
+    """Live community discussions around a lens -- its current 'pulse'.
+
+    Queries each demand searcher (Reddit / HN) with the lens name and merges the freshest
+    hits, deduped by url. This is what practitioners in this vantage are complaining about
+    or discussing RIGHT NOW: observed pain the generator can serve directly, instead of
+    imagining needs. Best-effort: a failing searcher contributes nothing.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for s in searchers or []:
+        try:
+            hits = s.search(lens.name, k=k) or []
+        except Exception:
+            continue
+        for h in hits:
+            u = (h.get("url") or h.get("title") or "").strip()
+            if not u or u in seen:
+                continue
+            seen.add(u)
+            out.append(h)
+    return out[:cap]
+
+
+def _render_pulse(pulse: list[dict]) -> str:
+    """Fenced 'live pulse' lines (title + snippet); "" when there is no pulse."""
+    if not pulse:
+        return ""
+    from .slots import defang_untrusted, fence_untrusted   # function-level: avoids import cycle
+    lines = []
+    for p in pulse:
+        title = defang_untrusted(str(p.get("title", "")).strip())
+        snippet = defang_untrusted(str(p.get("snippet", "")).strip())
+        line = f"- {title}"
+        if snippet:
+            line += f" — {snippet[:160]}"
+        lines.append(line)
+    return ("LIVE PULSE (what this vantage is discussing right now -- observed, not imagined):\n"
+            + fence_untrusted("\n".join(lines)))
+
+
+def render_lens_block(lens: Lens | None, pulse: list[dict] | None = None) -> str:
     """Render one lens into a prompt block (header + how-to), or "" when there is none.
 
     The block is self-contained (its own header + instruction) so a slot template only
     needs a bare {{LENS}} placeholder: when no lens is assigned it renders to nothing.
+    `pulse` optionally appends live community discussions (Reddit/HN) for this vantage.
     """
     if not lens:
         return ""
@@ -119,5 +161,21 @@ def render_lens_block(lens: Lens | None) -> str:
             "questions, and prefer a falsifiable test on the listed data. Do NOT drift back "
             "into pure abstraction -- the vantage is the anchor, not a decoration."
         )
-    return ("== GROUNDING VANTAGE (real, externally sourced -- do not invent it) ==\n"
-            f"{body}\n{howto}")
+    pulse_block = _render_pulse(pulse or [])
+    parts = [
+        "== GROUNDING VANTAGE (real, externally sourced -- do not invent it) ==",
+        body,
+    ]
+    if pulse_block:
+        parts.append(pulse_block)
+        parts.append(
+            "If the live pulse above surfaces a current, specific pain or hot thread, PREFER "
+            "serving that -- it is observed demand, the strongest evidence of usefulness."
+        )
+    parts.append(howto)
+    parts.append(
+        "PRIORITY: this vantage LEADS the topic choice. When it pulls away from the user's "
+        "standing agenda (interest seed), follow the vantage -- the interest seed contributes "
+        "structural taste (how they like problems shaped), NOT the subject matter here."
+    )
+    return "\n".join(parts)

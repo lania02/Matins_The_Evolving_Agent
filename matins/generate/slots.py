@@ -184,7 +184,7 @@ def build_generation_prompt(
         "RETRIEVAL": _format_retrieval(context.get("retrieval") or []),
         "RECENT_IDEAS": _format_recent_ideas(context.get("recent_ideas") or []),
         "OCCUPIED_CELLS": _format_occupied_cells(context.get("occupied") or []),
-        "LENS": render_lens_block(context.get("lens")),
+        "LENS": render_lens_block(context.get("lens"), context.get("lens_pulse")),
         "ARCHIVE": _format_archive(context.get("archive") or []),
         "INTEREST_SEED": context.get("interest_seed") or "(interest seed not filled in yet)",
         "IDEA_SCHEMA": _idea_schema_instruction(),
