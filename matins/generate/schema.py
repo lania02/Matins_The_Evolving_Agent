@@ -15,6 +15,7 @@ IDEA_FIELDS = [
     "title",
     "bridge",           # the collision: the explicit structural correspondence between the two fused poles
     "mechanism",
+    "elaboration",      # the deep walkthrough: construction, load-bearing argument, key assumption, first experiment
     "why_now",
     "math_structure",   # empty if none -- itself a signal
     "tractability",

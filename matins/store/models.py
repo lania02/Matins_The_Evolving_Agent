@@ -42,6 +42,7 @@ class Idea:
     title: str = ""
     bridge: str = ""                   # the collision: explicit structural correspondence of the two fused poles
     mechanism: str = ""
+    elaboration: str = ""              # deep walkthrough: construction, load-bearing argument, key assumption, first experiment
     why_now: str = ""
     math_structure: str = ""
     prior_art: str = ""

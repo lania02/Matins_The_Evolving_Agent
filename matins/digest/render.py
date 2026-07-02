@@ -99,6 +99,7 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
 
         add("Vantage", idea.lens)                    # the real-world grounding lens, if any
         add("Bridge", idea.bridge)                   # the collision, shown first as the headline
+        add("Elaboration", idea.elaboration)         # the deep walkthrough
         add("Mechanism", idea.mechanism)
         add("Why now", idea.why_now)
         add("Math structure", idea.math_structure)  # skipped when empty
@@ -173,6 +174,7 @@ def render_overview(store, batches, *, db_path: str | None = None) -> str:
             for field_label, value in (
                 ("Vantage", idea.lens),
                 ("Bridge", idea.bridge),
+                ("Elaboration", idea.elaboration),
                 ("Mechanism", idea.mechanism),
                 ("Why now", idea.why_now),
                 ("Math structure", idea.math_structure),
@@ -217,6 +219,7 @@ def render_favorites_md(favorites) -> str:
         for field_label, value in (
             ("Vantage", idea.lens),
             ("Bridge", idea.bridge),
+            ("Elaboration", idea.elaboration),
             ("Mechanism", idea.mechanism),
             ("Why now", idea.why_now),
             ("Math structure", idea.math_structure),

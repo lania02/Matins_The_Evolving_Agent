@@ -466,6 +466,7 @@ def run_batch(
             title=parsed["title"],
             bridge=parsed.get("bridge", ""),
             mechanism=parsed["mechanism"],
+            elaboration=parsed.get("elaboration", ""),
             why_now=parsed["why_now"],
             math_structure=parsed["math_structure"],
             prior_art=parsed.get("prior_art", "[unchecked]"),

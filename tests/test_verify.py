@@ -120,6 +120,17 @@ def test_intersect_score_multiplicative_and_partial_axes():
     assert only_useful is not None and only_useful > s2
 
 
+def test_schema_instruction_demands_a_deep_elaboration():
+    from matins.generate.slots import _idea_schema_instruction
+    from matins.generate.schema import IDEA_FIELDS, normalize_idea
+    instr = _idea_schema_instruction()
+    assert "elaboration" in IDEA_FIELDS and "elaboration" in instr
+    assert "LOAD-BEARING ARGUMENT" in instr and "FALSIFY" in instr
+    # a reply omitting it normalizes to "" (does not crash); one supplying it is kept
+    assert normalize_idea({"title": "T"}).get("elaboration") == ""
+    assert normalize_idea({"title": "T", "elaboration": "deep"}).get("elaboration") == "deep"
+
+
 def test_run_panel_stores_intersect_and_digest_ranks_by_it():
     from matins.digest.render import render_digest
 

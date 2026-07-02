@@ -69,7 +69,20 @@ def _idea_schema_instruction() -> str:
         "BAD (will be rejected): \"both fields involve networks, so combining them is "
         "promising.\" GOOD: \"the X of A is exactly the Y of B because both are the fixed "
         "point of the same map Z; minimal test: compute Z on a toy instance and check the "
-        "two coincide.\" Do not include prior_art."
+        "two coincide.\" "
+        "Write \"elaboration\" as the idea's DEEP walkthrough -- this is where a reader who "
+        "likes the bridge decides whether it actually works, so do not be terse. Cover, in "
+        "order and concretely: (1) the CONSTRUCTION -- set up the objects explicitly, with "
+        "actual quantities / a tiny worked instance where possible, not just their names; "
+        "(2) the LOAD-BEARING ARGUMENT -- the one step a skeptic would attack, stated and "
+        "defended, NOT a restatement of the title; (3) the KEY ASSUMPTION and the regime "
+        "where it holds (and where it breaks); (4) the FIRST EXPERIMENT -- what exactly you "
+        "compute or measure, on what data, the number or signature you expect, and the "
+        "result that would FALSIFY the idea. Several sentences, specific throughout -- a "
+        "one-liner here is a failure. "
+        "Make \"mechanism\" concrete numbered steps (inputs, operations, outputs), and "
+        "\"tractability\" the actual first build with its data and rough effort, not a vibe. "
+        "Do not include prior_art."
     )
 
 
