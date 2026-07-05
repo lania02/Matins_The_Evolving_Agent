@@ -464,6 +464,7 @@ def run_batch(
             slot=slot,
             idx=len(ideas) + 1,
             title=parsed["title"],
+            intuition=parsed.get("intuition", ""),
             bridge=parsed.get("bridge", ""),
             mechanism=parsed["mechanism"],
             elaboration=parsed.get("elaboration", ""),

@@ -120,14 +120,18 @@ def test_intersect_score_multiplicative_and_partial_axes():
     assert only_useful is not None and only_useful > s2
 
 
-def test_schema_instruction_demands_a_deep_elaboration():
+def test_schema_instruction_demands_depth_grounding_and_intuition():
     from matins.generate.slots import _idea_schema_instruction
     from matins.generate.schema import IDEA_FIELDS, normalize_idea
     instr = _idea_schema_instruction()
     assert "elaboration" in IDEA_FIELDS and "elaboration" in instr
+    assert "intuition" in IDEA_FIELDS and "intuition" in instr
     assert "LOAD-BEARING ARGUMENT" in instr and "FALSIFY" in instr
-    # a reply omitting it normalizes to "" (does not crash); one supplying it is kept
-    assert normalize_idea({"title": "T"}).get("elaboration") == ""
+    # anti-abstraction: real target required, math x math rejected, runnable artifact demanded
+    assert "math x math" in instr and "REJECTED" in instr
+    assert "RUNNABLE weekend artifact" in instr
+    # replies omitting the new fields normalize to "" (no crash); supplied ones are kept
+    assert normalize_idea({"title": "T"}).get("intuition") == ""
     assert normalize_idea({"title": "T", "elaboration": "deep"}).get("elaboration") == "deep"
 
 

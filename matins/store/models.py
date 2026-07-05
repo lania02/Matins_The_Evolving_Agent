@@ -40,6 +40,7 @@ class Idea:
     slot: str
     idx: int
     title: str = ""
+    intuition: str = ""                # plain-language, jargon-free "what real thing + why care" (graspable in 10s)
     bridge: str = ""                   # the collision: explicit structural correspondence of the two fused poles
     mechanism: str = ""
     elaboration: str = ""              # deep walkthrough: construction, load-bearing argument, key assumption, first experiment

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   slot            TEXT,
   idx             INTEGER,
   title           TEXT,
+  intuition       TEXT DEFAULT '',       -- plain-language "what real thing + why care" (jargon-free)
   bridge          TEXT DEFAULT '',       -- the collision: structural correspondence of the two fused poles
   mechanism       TEXT,
   elaboration     TEXT DEFAULT '',       -- deep walkthrough: construction / argument / assumption / first experiment
@@ -146,6 +147,7 @@ class Store:
         self._ensure_column("ideas", "lens", "TEXT DEFAULT ''")
         self._ensure_column("ideas", "verdicts", "TEXT DEFAULT ''")
         self._ensure_column("ideas", "elaboration", "TEXT DEFAULT ''")
+        self._ensure_column("ideas", "intuition", "TEXT DEFAULT ''")
         self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, decl: str) -> None:
@@ -202,12 +204,13 @@ class Store:
     # ---- ideas -----------------------------------------------------------
     def insert_idea(self, idea: Idea) -> None:
         self.conn.execute(
-            """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, bridge, mechanism,
-               elaboration, why_now, math_structure, prior_art, tractability, fit_to_program,
-               behavior, lens, verdicts, random_genes, self_rank, self_rationale, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title, idea.bridge,
-             idea.mechanism, idea.elaboration, idea.why_now, idea.math_structure,
+            """INSERT INTO ideas (idea_id, batch_id, slot, idx, title, intuition, bridge,
+               mechanism, elaboration, why_now, math_structure, prior_art, tractability,
+               fit_to_program, behavior, lens, verdicts, random_genes, self_rank,
+               self_rationale, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (idea.idea_id, idea.batch_id, idea.slot, idea.idx, idea.title, idea.intuition,
+             idea.bridge, idea.mechanism, idea.elaboration, idea.why_now, idea.math_structure,
              idea.prior_art, idea.tractability, idea.fit_to_program, idea.behavior, idea.lens,
              idea.verdicts, idea.random_genes, idea.self_rank, idea.self_rationale,
              idea.created_at or now_iso()),

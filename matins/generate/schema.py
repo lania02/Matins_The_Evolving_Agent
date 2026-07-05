@@ -13,6 +13,7 @@ import re
 # generation and filled by the novelty check (section 7).
 IDEA_FIELDS = [
     "title",
+    "intuition",        # plain-language, jargon-free "what real thing is this + why care" (graspable in 10s)
     "bridge",           # the collision: the explicit structural correspondence between the two fused poles
     "mechanism",
     "elaboration",      # the deep walkthrough: construction, load-bearing argument, key assumption, first experiment

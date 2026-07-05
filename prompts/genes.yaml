@@ -3,22 +3,29 @@
 # research idea out of it. Lists span math, CS/ML, physics, biology, economics, etc.
 # Later this vocabulary can be grown from the log (the v2 evolutionary engine).
 
+# DOMAIN = a REAL-WORLD area you can point at (a place, a system, a decision people make),
+# NOT a branch of mathematics. Abstract fields (category theory, algebraic topology, ...) were
+# removed on purpose: paired with an abstract METHOD they forced impenetrable math-on-math
+# ideas. The surprise now comes from a real domain meeting an unexpected method.
 domain:
-  - statistical mechanics of disordered systems
-  - algebraic topology
-  - population genetics and evolutionary dynamics
-  - mechanism design and auction theory
-  - reinforcement learning
-  - quantum information and error correction
-  - network epidemiology
-  - category theory
-  - climate and earth-system modeling
-  - computational neuroscience
-  - cryptography and secure computation
-  - macroeconomic policy and central banking
+  - epidemics and disease spread
+  - wildfires, floods, and extreme weather
+  - power grids and electricity markets
+  - urban transit and traffic
+  - supply chains and logistics
+  - elections and public opinion
+  - online platforms and content moderation
+  - hospital operations and triage
+  - drug discovery and clinical trials
+  - ecology and biodiversity collapse
+  - policing and criminal justice
+  - hiring and labor markets
+  - housing and homelessness services
+  - water resources and droughts
+  - misinformation and information ecosystems
+  - auctions, pricing, and marketplaces
   - protein structure and folding
-  - combinatorial optimization
-  - causal inference
+  - central banking and macro policy
 
 method:
   - spectral graph analysis
