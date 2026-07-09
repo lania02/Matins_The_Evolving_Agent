@@ -6,6 +6,8 @@ never crashes the daily loop.
 """
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from ...config import Config
@@ -25,6 +27,34 @@ def escape_markdown_v2(text: str) -> str:
             out.append("\\")
         out.append(ch)
     return "".join(out)
+
+
+# Field labels render_digest emits (matins/digest/render.py) -- these are CODE-controlled
+# strings, never LLM-generated content, so it is safe to wrap them in literal (unescaped)
+# MarkdownV2 bold markers. None contain a reserved character, so a plain match against the
+# already-escaped text is exact -- no separate unescaped pass is needed.
+_BOLD_LABELS = (
+    "Self rank", "Intuition", "Vantage", "Bridge", "Elaboration", "Mechanism",
+    "Why now", "Math structure", "Tractability", "Fit to program", "Checks", "Prior art",
+)
+_LABEL_RE = re.compile(r"(?m)^(" + "|".join(re.escape(lbl) for lbl in _BOLD_LABELS) + r"): ")
+
+
+def _bold_key_terms(escaped_text: str) -> str:
+    """Bold the first line (the idea/header title) and known field labels, for a card
+    that is skimmable on a phone -- called AFTER escape_markdown_v2 so the bold markers
+    inserted here are the only literal (unescaped) '*' in the message.
+
+    Only ever wraps code-controlled structure (never raw LLM field VALUES) in bold, so an
+    idea's own text cannot inject formatting or break the message.
+    """
+    if not escaped_text:
+        return escaped_text
+    lines = escaped_text.split("\n", 1)
+    if lines[0]:
+        lines[0] = f"*{lines[0]}*"
+    text = "\n".join(lines)
+    return _LABEL_RE.sub(lambda m: f"*{m.group(1)}*: ", text)
 
 
 def _replies_from_updates(updates: list, chat_id: str | None) -> list[Reply]:
@@ -76,7 +106,7 @@ class TelegramProvider:
                 "(set MATINS_TELEGRAM_TOKEN and messaging.telegram.chat_id)."
             )
 
-        body = escape_markdown_v2(text) if parse_mode == "MarkdownV2" else text
+        body = _bold_key_terms(escape_markdown_v2(text)) if parse_mode == "MarkdownV2" else text
         payload = {"chat_id": self.chat_id, "text": body, "parse_mode": parse_mode}
 
         with httpx.Client(timeout=_TIMEOUT) as client:

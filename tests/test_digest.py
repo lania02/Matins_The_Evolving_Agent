@@ -51,6 +51,36 @@ def test_render_digest_shape_and_limits() -> None:
     assert batch.date in header
 
 
+def test_self_critique_surfaced_right_after_intuition() -> None:
+    # The model's own self-rank rationale is the most independent skepticism available
+    # (e.g. "already studied by X et al.") -- it must be visible near the TOP of the card,
+    # right after Intuition and BEFORE the pitch (Vantage/Bridge), not buried at the bottom.
+    batch, ideas = _make_batch_and_ideas()
+    idea = ideas[0]
+    idea.intuition = "a plain-language pitch"
+    idea.lens = "Some Vantage"
+    idea.bridge = "the collision"
+    idea.self_rank = 4
+    idea.self_rationale = "this exact pairing is already studied by Author et al. 2020"
+
+    _header, msgs = render_digest(batch, ideas, "bilingual")
+    msg = msgs[0]
+    assert "Self rank: 4/4 — this exact pairing is already studied" in msg
+    intuition_pos = msg.index("Intuition:")
+    self_rank_pos = msg.index("Self rank:")
+    vantage_pos = msg.index("Vantage:")
+    bridge_pos = msg.index("Bridge:")
+    assert intuition_pos < self_rank_pos < vantage_pos < bridge_pos
+
+
+def test_self_critique_absent_when_no_rationale() -> None:
+    batch, ideas = _make_batch_and_ideas()
+    idea = ideas[0]
+    idea.self_rationale = ""
+    _header, msgs = render_digest(batch, ideas, "bilingual")
+    assert "Self rank:" not in msgs[0]
+
+
 def test_render_overview_pulls_from_store() -> None:
     batch, ideas = _make_batch_and_ideas()
     store = Store(":memory:")

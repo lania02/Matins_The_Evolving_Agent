@@ -5,7 +5,11 @@ is the security boundary: only the configured owner chat's messages may become f
 """
 from __future__ import annotations
 
-from matins.providers.messaging.telegram import _replies_from_updates
+from matins.providers.messaging.telegram import (
+    _bold_key_terms,
+    _replies_from_updates,
+    escape_markdown_v2,
+)
 
 OWNER = "7302099055"
 
@@ -53,3 +57,72 @@ def test_unset_chat_id_trusts_nobody() -> None:
     updates = [_update(1, 123, "hello"), _update(2, 456, "world")]
     assert _replies_from_updates(updates, "") == []
     assert _replies_from_updates(updates, None) == []
+
+
+def test_bold_key_terms_bolds_title_line_and_known_labels() -> None:
+    raw = (
+        "#2 [adjacent-stretch] Wikipedia编辑战中的极化前兆\n"
+        "Intuition: some plain pitch (with parens).\n"
+        "Bridge: the collision, with a formula a+b=1.\n"
+        "Checks: useful 0.60 (conf 0.55)"
+    )
+    out = _bold_key_terms(escape_markdown_v2(raw))
+    lines = out.split("\n")
+    # first line (title) is wholly bold, still contains its escaped content
+    assert lines[0].startswith("*") and lines[0].endswith("*")
+    assert "adjacent\\-stretch" in lines[0]
+    # known field labels become bold; their VALUES stay untouched/escaped, not re-bolded
+    assert lines[1].startswith("*Intuition*: ")
+    assert lines[2].startswith("*Bridge*: ")
+    assert lines[3].startswith("*Checks*: ")
+    # only the label's own asterisks are unescaped -- the rest of the message has none
+    body_after_labels = "".join(l.split(": ", 1)[1] if ": " in l else l for l in lines[1:])
+    assert "*" not in body_after_labels
+
+
+def test_bold_key_terms_does_not_touch_non_label_lines() -> None:
+    raw = "Title line\nSome LLM sentence that happens to start with Bridgework: not a label"
+    out = _bold_key_terms(escape_markdown_v2(raw))
+    assert "*Bridgework*" not in out                # not an exact label match -> untouched
+
+
+def test_bold_key_terms_handles_empty_and_single_line() -> None:
+    assert _bold_key_terms("") == ""
+    assert _bold_key_terms("just one line") == "*just one line*"
+
+
+def test_send_wraps_body_in_bold_key_terms(monkeypatch) -> None:
+    from matins.config import Config
+    from matins.providers.messaging.telegram import TelegramProvider
+
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, json):
+            captured["json"] = json
+
+            class R:
+                status_code = 200
+
+                def json(self):
+                    return {"result": {"message_id": 1}}
+            return R()
+
+    monkeypatch.setattr("matins.providers.messaging.telegram.httpx.Client", FakeClient)
+    cfg = Config()
+    cfg.messaging.telegram.chat_id = "123"
+    import os
+    os.environ["MATINS_TELEGRAM_TOKEN"] = "tok"
+    provider = TelegramProvider(cfg)
+    provider.send("#1 [high-fit] Title\nIntuition: plain pitch")
+    assert captured["json"]["text"].startswith("*")
+    assert "*Intuition*: " in captured["json"]["text"]

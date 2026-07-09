@@ -59,6 +59,21 @@ def _evidence_ranking_line(ideas) -> str:
     return "evidence ranking (∩): " + " > ".join(f"#{idx}" for idx, _ in scored)
 
 
+def _self_critique_line(idea) -> str:
+    """The model's own self-rank rationale -- the most independent skepticism available.
+
+    It can catch things the search-anchored verifiers miss (e.g. "this specific pairing is
+    already studied by X et al."), since it draws on the model's own knowledge rather than a
+    live query. Surfaced right after Intuition -- BEFORE the pitch (Bridge/Elaboration) -- so
+    a prior-art or feasibility doubt is seen up front, not buried at the bottom of the card.
+    """
+    rationale = (idea.self_rationale or "").strip()
+    if not rationale:
+        return ""
+    rank = f"{idea.self_rank}/4" if idea.self_rank is not None else "?"
+    return f"{rank} — {rationale}"
+
+
 def _truncate(text: str) -> str:
     """Clamp a message to < 4096 chars, appending an ellipsis if cut."""
     if len(text) < _MAX_LEN:
@@ -98,6 +113,7 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
                 lines.append(f"{field_label}: {value}")
 
         add("Intuition", idea.intuition)             # plain-language pitch, shown first
+        add("Self rank", _self_critique_line(idea))  # the model's own doubts -- surfaced early
         add("Vantage", idea.lens)                    # the real-world grounding lens, if any
         add("Bridge", idea.bridge)                   # the collision
         add("Elaboration", idea.elaboration)         # the deep walkthrough
@@ -174,6 +190,7 @@ def render_overview(store, batches, *, db_path: str | None = None) -> str:
             out.append(f"### #{idea.idx} [{label}] {idea.title}{badge}")
             for field_label, value in (
                 ("Intuition", idea.intuition),
+                ("Self rank", _self_critique_line(idea)),
                 ("Vantage", idea.lens),
                 ("Bridge", idea.bridge),
                 ("Elaboration", idea.elaboration),

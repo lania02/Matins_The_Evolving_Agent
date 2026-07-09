@@ -133,6 +133,10 @@ def test_schema_instruction_demands_depth_grounding_and_intuition():
     # replies omitting the new fields normalize to "" (no crash); supplied ones are kept
     assert normalize_idea({"title": "T"}).get("intuition") == ""
     assert normalize_idea({"title": "T", "elaboration": "deep"}).get("elaboration") == "deep"
+    # elaboration is now capped to one sentence per part (compressed from the earlier
+    # "several sentences per part" instruction, which produced 800-1800 char walls of text)
+    assert "ONE sentence" in instr
+    assert "Several sentences" not in instr           # the old, now-contradictory phrasing is gone
 
 
 def test_run_panel_stores_intersect_and_digest_ranks_by_it():
