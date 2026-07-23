@@ -67,10 +67,23 @@ def cmd_run(args) -> int:
     batch, ideas = run_batch(cfg, store, llm, search, date=args.date)
     header, idea_msgs = render_digest(batch, ideas, cfg.generation.output_language)
 
+    # Daily news radar, pushed as one extra message after the ideas. Fully advisory: the
+    # batch is the product, so a radar failure must never cost the user their ideas.
+    news_msg = ""
+    if cfg.news.enabled:
+        try:
+            from .digest.render import render_news
+            from .news import collect_news
+            news_msg = render_news(collect_news(cfg, store), batch.date)
+        except Exception as e:
+            print(f"[warning] news radar failed (ideas unaffected): {e}")
+
     # Always print to stdout so the tool is usable with messaging.channel = none.
     print(header)
     for m in idea_msgs:
         print("\n" + m)
+    if news_msg:
+        print("\n" + news_msg)
 
     messaging = get_messaging_provider(cfg)
     if messaging is not None:
@@ -78,6 +91,8 @@ def cmd_run(args) -> int:
             digest_msg_id = messaging.send(header)
             for m in idea_msgs:
                 messaging.send(m)
+            if news_msg:
+                messaging.send(news_msg)
             if digest_msg_id:
                 store.set_batch_digest_msg_id(batch.batch_id, digest_msg_id)
             print(f"\n[sent digest to {cfg.messaging.channel}]")

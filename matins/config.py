@@ -71,6 +71,20 @@ class VerifyCfg:
 
 
 @dataclass
+class NewsCfg:
+    # Daily news radar, pushed alongside the idea digest by `matins run`. Keyword-free
+    # sources ranked by VELOCITY (metric per hour) rather than raw volume, boosted when a
+    # story also shows up in the watched subreddits. No LLM call, no extra paid search.
+    enabled: bool = False
+    count: int = 5                   # how many stories to push
+    window_hours: int = 24           # HN look-back
+    min_points: int = 50             # HN floor, to skip ordinary churn
+    dedup_days: int = 14             # do not re-report a story seen this recently
+    github_days: int = 14            # "recently created" window for repo breakouts
+    github_min_stars: int = 80       # star floor for a repo to count as a breakout
+
+
+@dataclass
 class TelegramCfg:
     bot_token_env: str = "MATINS_TELEGRAM_TOKEN"
     chat_id: str = ""
@@ -156,6 +170,7 @@ class Config:
     generation: GenerationCfg = field(default_factory=GenerationCfg)
     novelty: NoveltyCfg = field(default_factory=NoveltyCfg)
     verify: VerifyCfg = field(default_factory=VerifyCfg)
+    news: NewsCfg = field(default_factory=NewsCfg)
     messaging: MessagingCfg = field(default_factory=MessagingCfg)
     memory_kernels: list[MemoryKernelCfg] = field(default_factory=lambda: list(DEFAULT_KERNELS))
     consolidation: ConsolidationCfg = field(default_factory=ConsolidationCfg)
@@ -331,6 +346,7 @@ def load_config(path: str | Path = "config.yaml") -> Config:
         generation=generation,
         novelty=NoveltyCfg(**(data.get("novelty") or {})),
         verify=VerifyCfg(**(data.get("verify") or {})),
+        news=NewsCfg(**(data.get("news") or {})),
         messaging=MessagingCfg(
             channel=msg.get("channel", "telegram"),
             telegram=TelegramCfg(**tg),

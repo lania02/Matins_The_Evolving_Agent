@@ -135,6 +135,27 @@ def render_digest(batch, ideas, output_language) -> tuple[str, list[str]]:
     return header, messages
 
 
+def render_news(items, date: str) -> str:
+    """Render the daily radar as one plain-text message ("" when there is nothing).
+
+    Each line carries the EVIDENCE for its ranking -- the metric, its per-hour velocity, and
+    a ×-mark when a watched subreddit is discussing it too -- so the list is auditable rather
+    than an opaque "trending" feed. Framed as "what is hot", never "what is important":
+    nothing here has been checked for truth, only for attention.
+    """
+    if not items:
+        return ""
+    lines = [f"📰 Radar — {date} (hot, not vetted)"]
+    for n, item in enumerate(items, 1):
+        marks = f"{item.source} ↑{item.metric} · {item.velocity:.0f}/h"
+        if item.corroborated:
+            marks += " · ×subreddit"
+        lines.append(f"\n{n}. [{marks}] {item.title}")
+        if item.url:
+            lines.append(item.url)
+    return _truncate("\n".join(lines))
+
+
 def render_overview(store, batches, *, db_path: str | None = None) -> str:
     """Read-only markdown view of the DB: batches, the fresh retrieval that seeded
     each one, ideas (with self/user ranks), feedback, and deep-dive presence.

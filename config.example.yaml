@@ -53,6 +53,15 @@ novelty:
   saturation_gate_slots:
     - orthogonal
 
+news:                         # OPTIONAL daily radar, pushed as one message after the ideas.
+  enabled: false              # Keyword-free sources (HN past 24h + recent breakout GitHub
+  count: 5                    # repos) ranked by VELOCITY (metric/hour), boosted when a story
+  window_hours: 24            # also appears in retrieval.trend_subreddits. No LLM call, no
+  min_points: 50              # extra paid search. Reports "what is hot", NOT "what is true":
+  dedup_days: 14              # nothing here is fact-checked, only attention-ranked.
+  github_days: 14
+  github_min_stars: 80
+
 verify:                       # Verifier panel (MATINS_UPGRADE_PLAN A+B). Externally-anchored,
   axes: []                    # per-axis verdicts on each idea. [] = off (legacy single novelty note).
                               # Turn on with e.g. [unique, useful]:

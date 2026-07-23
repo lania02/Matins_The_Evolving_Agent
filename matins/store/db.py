@@ -100,6 +100,16 @@ CREATE TABLE IF NOT EXISTS deep_dives (
   sources    TEXT,
   created_at TEXT
 );
+
+-- Stories already pushed by the news radar, so tomorrow never re-reports today's news.
+-- No FK: news is independent of the idea log (a parallel stream, not a derived view).
+CREATE TABLE IF NOT EXISTS news_events (
+  url        TEXT PRIMARY KEY,
+  title      TEXT,
+  source     TEXT,
+  score      REAL,
+  created_at TEXT
+);
 """
 
 
@@ -316,6 +326,28 @@ class Store:
             (cutoff, exclude_batch_id, exclude_batch_id),
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ---- news radar ------------------------------------------------------
+    def insert_news_event(self, url: str, title: str, source: str, score: float) -> None:
+        """Record a pushed story (idempotent on url) so it is not re-reported later."""
+        self.conn.execute(
+            """INSERT OR IGNORE INTO news_events (url, title, source, score, created_at)
+               VALUES (?,?,?,?,?)""",
+            (url, title, source, score, now_iso()),
+        )
+        self.conn.commit()
+
+    def recent_news(self, days: int) -> tuple[set[str], list[str]]:
+        """(urls, titles) pushed within `days` -- the radar's de-duplication memory.
+
+        Titles come back too because the same story reappears under different URLs
+        (a blog post, its HN thread, a mirror), which a URL check alone would miss.
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = self.conn.execute(
+            "SELECT url, title FROM news_events WHERE created_at >= ?", (cutoff,)
+        ).fetchall()
+        return {r["url"] for r in rows}, [r["title"] or "" for r in rows]
 
     def recent_lens_tags(self, days: int) -> list[str]:
         """Distinct grounding vantages used in the last `days` days, so the lens sampler can
